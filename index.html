@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
+<meta name="blizko-ui" content="2026-10-07b">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -158,6 +159,8 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.updbar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:30;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 10px 10px 14px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:616px;margin:0 auto}
+.updbar span{flex:1}
 .chips.mdays{gap:6px}
 .chips.mdays .chip{min-width:38px;padding:7px 0;text-align:center}
 .chips.mdays .chip[data-d="-1"]{padding:7px 12px}
@@ -205,6 +208,7 @@ textarea{resize:none;min-height:64px}
 <nav id="nav"></nav>
 <div id="layer"></div>
 <div class="toast" id="toast"></div>
+<div class="updbar hide" id="updbar"><span>✨ Вышло обновление приложения</span><button class="btn sm pri" data-act="applyupd">Обновить</button></div>
 
 <script>
 'use strict';
@@ -483,7 +487,7 @@ function contactRow(p){
   return `<div class="row" data-act="person" data-pid="${p.id}"><span class="ava" style="background:${p.color||COLORS[4]}">${esc(initials(p.name))}</span><div class="txt"><div class="t">${esc(p.name)}</div><div class="m"><span>${ago}</span>${late>0?`<span class="late">просрочено на ${late} ${plural(late,['день','дня','дней'])}</span>`:''}</div></div><button class="btn sm" data-act="met" data-pid="${p.id}">Связались</button></div>`;
 }
 function dayBlock(k,label){
-  const its=itemsOn(k), bd=S.people.filter(p=>bdayOn(p,k));
+  const its=itemsOn(k).filter(it=>it.type!=='habit'), bd=S.people.filter(p=>bdayOn(p,k));
   let b=its.map(it=>row(it,k)).join('')+bd.map(p=>bdayRow(p,k)).join('');
   return section(label,b||empty('Ничего не запланировано'));
 }
@@ -502,6 +506,7 @@ function vToday(){
   const over=S.items.filter(it=>it.type==='task'&&!isRep(it)&&it.date&&it.date<k&&!it.done).sort((a,b)=>a.date.localeCompare(b.date));
   if(over.length)h+=section('Просрочено',over.map(it=>row(it,it.date,true)).join(''),'warn',`<span class="n">${over.length}</span>`);
   h+=dayBlock(k,'План на сегодня');
+  if(hb.length)h+=section('Привычки',hb.map(it=>row(it,k)).join(''),'',`<span class="n">${hb.length-hl} из ${hb.length}</span>`);
   const due=S.people.filter(p=>p.every&&contactDue(p)<=k);
   if(due.length)h+=section('Пора связаться',due.map(contactRow).join(''));
   h+=dayBlock(addDays(k,1),'Завтра');
@@ -982,6 +987,10 @@ function openSettings(){
     <div class="fl"><label>Время этих уведомлений<div class="hint">и задач без точного времени</div></label><input type="time" id="s-morn" value="${esc(s.morning)}"></div>
     <div class="fl"><label>Проверить уведомления</label><button type="button" class="btn sm" data-act="testnotif">Через 5 сек</button></div>
   </div>
+  ${window.Native&&Native.checkUpdate?`<div class="fld">
+    <div class="fl"><label>Интерфейс<div class="hint">${(()=>{const t=+Native.uiUpdatedAt();return t?'обновлён '+relDay(dkey(new Date(t)))+' в '+new Date(t).toTimeString().slice(0,5):'встроенная версия';})()} · обновляется сам</div></label><button type="button" class="btn sm" data-act="checkupd">Проверить</button></div>
+    <div class="fl"><label>Приложение ${esc(Native.appVersion())}<div class="hint">переустанавливать нужно, только если я скажу</div></label><button type="button" class="btn sm" data-act="openapk">Скачать APK</button></div>
+  </div>`:''}
   <div class="fld">
     <div class="fl"><label>Резервная копия<div class="hint">отправьте себе в мессенджер или почту</div></label><button type="button" class="btn sm" data-act="export">Сохранить</button></div>
     <div class="fl"><label>Восстановить из файла</label><button type="button" class="btn sm" data-act="importfile">Выбрать</button></div>
@@ -1145,6 +1154,9 @@ document.addEventListener('click',e=>{
     case 'saveperson':savePerson();break;
     case 'delperson':deletePerson();break;
     case 'savesettings':saveSettings();break;
+    case 'checkupd':toast('Проверяю…');Native.checkUpdate();break;
+    case 'openapk':Native.openApk();break;
+    case 'applyupd':$('#updbar').classList.add('hide');try{Native.reload();}catch(e){location.reload();}break;
     case 'testnotif':if(window.Native&&Native.test){Native.test();toast('Уведомление придёт через 5 секунд');}else toast('Уведомления работают только в приложении на телефоне');break;
     case 'export':doExport();break;
     case 'importfile':$('#s-file').click();break;
@@ -1166,7 +1178,12 @@ window.__resume=()=>{if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.__resume();});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);
 
+/* обновления интерфейса */
+window.__updateReady=()=>{$('#updbar').classList.remove('hide');};
+window.__updateResult=r=>{if(r===1){closeSheet();window.__updateReady();}else if(r===0)toast('У вас последняя версия');else toast('Не удалось проверить — нет интернета?');};
+
 applyTheme();render();scheduleNow();
+try{if(window.Native&&Native.ready)Native.ready();}catch(e){}
 </script>
 </body>
 </html>
