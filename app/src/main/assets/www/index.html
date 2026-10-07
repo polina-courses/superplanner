@@ -158,6 +158,17 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.updbar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:30;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 10px 10px 14px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:616px;margin:0 auto}
+.updbar span{flex:1}
+.chips.mdays{gap:6px}
+.chips.mdays .chip{min-width:38px;padding:7px 0;text-align:center}
+.chips.mdays .chip[data-d="-1"]{padding:7px 12px}
+.chips.mons{gap:6px}
+.chips.mons .chip{min-width:48px;text-align:center}
+.rep-prev{background:var(--soft);border-radius:12px;padding:10px 12px;margin:4px 0 12px;font-size:13px;line-height:1.45}
+.rep-prev:empty{display:none}
+.rp-l{font-weight:700;color:var(--accent)}
+.rp-d{color:var(--ink);margin-top:2px}
 .hab{padding:12px 14px 12px;border-top:1px solid var(--line)}
 .hab:first-child{border-top:0}
 .hrow{display:flex;align-items:center;gap:12px}
@@ -196,6 +207,7 @@ textarea{resize:none;min-height:64px}
 <nav id="nav"></nav>
 <div id="layer"></div>
 <div class="toast" id="toast"></div>
+<div class="updbar hide" id="updbar"><span>✨ Вышло обновление приложения</span><button class="btn sm pri" data-act="applyupd">Обновить</button></div>
 
 <script>
 'use strict';
@@ -224,6 +236,13 @@ const atMs=(k,t)=>{const [y,m,d]=k.split('-').map(Number);const [hh,mm]=(t||'09:
 
 /* ============ повторения ============ */
 const isRep=it=>!!(it.repeat&&it.repeat.freq&&it.repeat.freq!=='none');
+/* ISO-номер недели (как в «чётная/нечётная неделя») */
+function isoWeek(k){
+  const d=pdate(k);d.setDate(d.getDate()+3-dow(k));
+  const y=new Date(d.getFullYear(),0,4);
+  return 1+Math.round((Math.round((d-y)/864e5)-3+(y.getDay()+6)%7)/7);
+}
+const inMonths=(r,d)=>!(r.months&&r.months.length)||r.months.includes(d.getMonth()+1);
 function occursOn(it,k){
   if(!it.date||k<it.date)return false;
   if(!isRep(it))return k===it.date;
@@ -231,18 +250,28 @@ function occursOn(it,k){
   if(r.until&&k>r.until)return false;
   if(it.skip&&it.skip.includes(k))return false;
   const iv=Math.max(1,parseInt(r.interval)||1), s=pdate(it.date), d=pdate(k);
+  if(!inMonths(r,d))return false;
   switch(r.freq){
     case 'daily': return diffDays(it.date,k)%iv===0;
     case 'weekly':{
       const days=(r.days&&r.days.length)?r.days:[dow(it.date)];
       if(!days.includes(dow(k)))return false;
+      if(r.par)return (isoWeek(k)%2===0)===(r.par==='even');
       const w=Math.round(diffDays(addDays(it.date,-dow(it.date)),addDays(k,-dow(k)))/7);
       return w%iv===0;
     }
     case 'monthly':{
       const m=(d.getFullYear()-s.getFullYear())*12+d.getMonth()-s.getMonth();
       if(m%iv)return false;
-      return d.getDate()===Math.min(s.getDate(),dim(d.getFullYear(),d.getMonth()));
+      const L=dim(d.getFullYear(),d.getMonth()), dd=d.getDate();
+      if(r.mmode==='nth'){
+        const nd=(r.nthDays&&r.nthDays.length)?r.nthDays:[dow(it.date)];
+        if(!nd.includes(dow(k)))return false;
+        const ns=(r.nth&&r.nth.length)?r.nth:[Math.ceil(s.getDate()/7)];
+        return ns.includes(Math.ceil(dd/7))||(dd+7>L&&ns.includes(-1));
+      }
+      const md=(r.mdays&&r.mdays.length)?r.mdays:[s.getDate()];
+      return md.some(x=>x===-1?dd===L:Math.min(x,L)===dd);
     }
     case 'yearly':{
       const y=d.getFullYear()-s.getFullYear();
@@ -263,14 +292,48 @@ function nextOcc(it,from,undoneOnly){
   }
   return null;
 }
+/* ----- подписи повторов ----- */
+const MS=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+const WACC=['понедельник','вторник','среду','четверг','пятницу','субботу','воскресенье'];
+const WG=['m','m','f','m','f','f','n'];
+const nthSort=a=>a.slice().sort((x,y)=>(x<0?9:x)-(y<0?9:y));
+const joinAnd=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' и '+a[a.length-1];
+function monthsLabel(ms){
+  if(!ms||!ms.length||ms.length===12)return '';
+  const a=ms.slice().sort((x,y)=>x-y),runs=[];
+  for(const m of a){const r=runs[runs.length-1];if(r&&r[1]===m-1)r[1]=m;else runs.push([m,m]);}
+  if(runs.length>1&&runs[0][0]===1&&runs[runs.length-1][1]===12){const f=runs.shift();runs[runs.length-1][1]=f[1]+12;}
+  return runs.map(([x,y])=>x===y?MS[x-1]:`${MS[x-1]}–${MS[(y-1)%12]}`).join(', ');
+}
 function repLabel(r){
   if(!r||r.freq==='none')return '';
   const iv=Math.max(1,parseInt(r.interval)||1);
-  if(r.freq==='weekly'&&iv===1&&r.days&&r.days.join()==='0,1,2,3,4')return 'по будням';
-  const one={daily:'каждый день',weekly:'каждую неделю',monthly:'каждый месяц',yearly:'каждый год'}[r.freq];
   const forms={daily:['день','дня','дней'],weekly:['неделю','недели','недель'],monthly:['месяц','месяца','месяцев'],yearly:['год','года','лет']}[r.freq];
-  let s=iv===1?one:`раз в ${iv} ${plural(iv,forms)}`;
-  if(r.freq==='weekly'&&r.days&&r.days.length)s+=': '+r.days.slice().sort().map(i=>WD[i].toLowerCase()).join(', ');
+  const every=iv===1?{daily:'каждый день',weekly:'каждую неделю',monthly:'каждый месяц',yearly:'каждый год'}[r.freq]:`раз в ${iv} ${plural(iv,forms)}`;
+  let s=every;
+  if(r.freq==='weekly'){
+    const days=(r.days||[]).slice().sort(),dl=days.map(i=>WD[i].toLowerCase()).join(', ');
+    if(!r.par&&iv===1&&days.join()==='0,1,2,3,4')s='по будням';
+    else if(r.par)s=`по ${r.par==='even'?'чётным':'нечётным'} неделям: ${dl}`;
+    else if(days.length)s+=': '+dl;
+  }
+  if(r.freq==='monthly'){
+    if(r.mmode==='nth'&&r.nth&&r.nth.length&&r.nthDays&&r.nthDays.length){
+      const ns=nthSort(r.nth),ds=r.nthDays.slice().sort();
+      if(ns.length===1&&ds.length===1){
+        const g=WG[ds[0]],n=ns[0];
+        const ord=n===-1?{m:'последний',f:'последнюю',n:'последнее'}[g]:n+{m:'-й',f:'-ю',n:'-е'}[g];
+        s=iv===1?`${{m:'каждый',f:'каждую',n:'каждое'}[g]} ${ord} ${WACC[ds[0]]} месяца`:`${ord} ${WACC[ds[0]]}, ${every}`;
+      }else s=`${every}: ${joinAnd(ns.map(n=>n===-1?'последний':n+'-й'))} ${ds.map(i=>WD[i].toLowerCase()).join(', ')}`;
+    }else if(r.mdays&&r.mdays.length){
+      const md=nthSort(r.mdays),nums=md.filter(x=>x>0),parts=[];
+      if(nums.length)parts.push(nums.join(', ')+' числа');
+      if(md.includes(-1))parts.push('последний день');
+      s=`${every}: ${parts.join(' и ')}`;
+    }
+  }
+  const ml=monthsLabel(r.months);
+  if(ml)s+=` · ${ml}`;
   return s;
 }
 
@@ -652,11 +715,12 @@ function openItem(id,preset={},ctxK=''){
   edit=src?JSON.parse(JSON.stringify(src)):Object.assign({id:uid(),type:'task',title:'',date:today(),time:'',end:'',repeat:{freq:'none',interval:1,days:[],until:''},prio:0,color:COLORS[0],icon:'',remind:null,subs:[],notes:'',cd:false,gmode:'steps',target:'',cur:0,unit:'',due:''},preset);
   if(!src&&edit.type==='event'&&edit.remind==null&&S.settings.defRemind!=='')edit.remind=+S.settings.defRemind;
   if(!src&&edit.type==='habit'&&edit.repeat.freq==='none')edit.repeat={freq:'daily',interval:1,days:[],until:''};
-  edit.repeat=Object.assign({freq:'none',interval:1,days:[],until:''},edit.repeat||{});
+  edit.repeat=Object.assign({freq:'none',interval:1,days:[],until:'',mmode:'day',mdays:[],nth:[],nthDays:[],par:'',months:[]},edit.repeat||{});
+  for(const f of ['days','mdays','nth','nthDays','months'])edit.repeat[f]=(edit.repeat[f]||[]).slice();
   edit.subs=edit.subs||[];edit.gmode=edit.gmode||'steps';
   editCtx={isNew:!src,k:ctxK};
   let freq=edit.repeat.freq;
-  if(freq==='weekly'&&+edit.repeat.interval===1&&edit.repeat.days.join()==='0,1,2,3,4')freq='workdays';
+  if(freq==='weekly'&&+edit.repeat.interval===1&&!edit.repeat.par&&edit.repeat.days.slice().sort().join()==='0,1,2,3,4')freq='workdays';
   const k=ctxK||edit.date;
   const html=`
   <div class="shead"><h3>${src?'Изменить':'Новая запись'}</h3>${src?`<button class="iconbtn" data-act="delitem" aria-label="Удалить"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/></svg></button>`:''}</div>
@@ -668,9 +732,25 @@ function openItem(id,preset={},ctxK=''){
     <div class="fl"><label><span data-only="task habit">Время</span><span data-only="event">Начало</span></label><input type="time" id="f-time" value="${esc(edit.time||'')}"><button type="button" class="x" data-act="notime" title="Без времени">×</button></div>
     <div class="fl" data-only="event"><label>Конец</label><input type="time" id="f-end" value="${esc(edit.end||'')}"></div>
     <div class="fl"><label><span data-only="task event">Повтор</span><span data-only="habit">Как часто</span></label><select id="f-freq">${FREQS.map(([v,l])=>`<option value="${v}" ${v===freq?'selected':''}>${l}</option>`).join('')}</select></div>
-    <div class="fl rep-iv"><label>Интервал<div class="hint">1 — каждый раз, 2 — через раз…</div></label><input type="number" class="small" id="f-int" min="1" max="99" value="${+edit.repeat.interval||1}"></div>
-    <div class="rep-days"><div class="chips">${WD.map((w,i)=>`<button type="button" class="chip ${edit.repeat.days.includes(i)?'on':''}" data-act="wday" data-i="${i}">${w}</button>`).join('')}</div></div>
-    <div class="fl rep-until"><label>Повторять до<div class="hint">можно не указывать</div></label><input type="date" id="f-until" value="${esc(edit.repeat.until||'')}"></div>
+    <div class="rep-box">
+    <div class="fl rep-iv"><label>Интервал<div class="hint">1 — каждый раз, 2 — через раз…</div></label><input type="number" class="small" id="f-int" min="1" max="999" value="${+edit.repeat.interval||1}"><span class="muted small" id="iv-unit" style="min-width:52px"></span></div>
+    <div class="rep-week">
+      <div class="chips">${WD.map((w,i)=>`<button type="button" class="chip" data-act="wday" data-i="${i}">${w}</button>`).join('')}</div>
+      <div class="fl"><label>Недели<div class="hint">по номеру недели в году</div></label><select id="f-par"><option value="">Все</option><option value="even" ${edit.repeat.par==='even'?'selected':''}>Чётные</option><option value="odd" ${edit.repeat.par==='odd'?'selected':''}>Нечётные</option></select></div>
+    </div>
+    <div class="rep-month">
+      <div class="seg" style="margin:8px 0 2px"><button type="button" data-act="mmode" data-m="day">По числам</button><button type="button" data-act="mmode" data-m="nth">По дням недели</button></div>
+      <div class="rep-mday"><div class="chips mdays">${Array.from({length:31},(_,i)=>`<button type="button" class="chip" data-act="mday" data-d="${i+1}">${i+1}</button>`).join('')}<button type="button" class="chip" data-act="mday" data-d="-1">Последний день</button></div></div>
+      <div class="rep-nth">
+        <div class="chips">${[[1,'1-й'],[2,'2-й'],[3,'3-й'],[4,'4-й'],[-1,'Последний']].map(([n,l])=>`<button type="button" class="chip" data-act="nth" data-n="${n}">${l}</button>`).join('')}</div>
+        <div class="chips" style="padding-top:0">${WD.map((w,i)=>`<button type="button" class="chip" data-act="nthday" data-i="${i}">${w}</button>`).join('')}</div>
+      </div>
+    </div>
+    <div class="fl"><label>Только в некоторые месяцы<div class="hint">например, апрель–сентябрь</div></label><span class="toggle"><input type="checkbox" id="f-season" ${edit.repeat.months&&edit.repeat.months.length?'checked':''}><span></span></span></div>
+    <div class="rep-months"><div class="chips mons">${MS.map((m,i)=>`<button type="button" class="chip" data-act="rmonth" data-m="${i+1}">${m}</button>`).join('')}</div></div>
+    <div class="fl"><label>Повторять до<div class="hint">можно не указывать</div></label><input type="date" id="f-until" value="${esc(edit.repeat.until||'')}"></div>
+    <div class="rep-prev" id="rep-prev"></div>
+    </div>
   </div>
   <div class="fld" data-only="goal">
     <div class="fl"><label>Дедлайн<div class="hint">можно не указывать</div></label><input type="date" id="f-due" value="${esc(edit.due||'')}"><button type="button" class="x" data-act="nodue">×</button></div>
@@ -705,7 +785,9 @@ function openItem(id,preset={},ctxK=''){
   </form>`;
   openSheet(html);
   syncTypeUI();
-  $('#f-freq').addEventListener('change',syncRepUI);
+  const ef=$('#ef'),watch=['f-freq','f-int','f-par','f-season','f-until','f-date'];
+  ef.addEventListener('change',e=>{if(watch.includes(e.target.id))syncRepUI();});
+  ef.addEventListener('input',e=>{if(e.target.id==='f-int')syncRepUI();});
   if(!src)setTimeout(()=>$('#f-title')&&$('#f-title').focus(),250);
 }
 function syncTypeUI(){
@@ -727,14 +809,54 @@ function addCategory(name){
   const c={id:uid(),name,color};S.cats.push(c);save();return c;
 }
 const subRow=(s,done)=>`<div class="sub" data-sid="${s.id}"><button type="button" class="chk ${done?'on':''}" data-act="subchk"></button><input type="text" value="${esc(s.t)}" placeholder="Подпункт"><button type="button" class="x" data-act="delsub">×</button></div>`;
+function toggleIn(arr,v){const j=arr.indexOf(v);if(j>=0){if(arr.length>1)arr.splice(j,1);}else arr.push(v);}
 function syncRepUI(){
-  const f=$('#f-freq').value;
-  $('.rep-iv').classList.toggle('hide',f==='none'||f==='workdays');
-  $('.rep-until').classList.toggle('hide',f==='none');
-  $('.rep-days').classList.toggle('hide',f!=='weekly');
-  $('.rep-hint').classList.toggle('hide',f==='none'||edit.type!=='task');
-  if(f==='weekly'&&!edit.repeat.days.length){const d=$('#f-date').value||today();edit.repeat.days=[dow(d)];
-    document.querySelectorAll('[data-act="wday"]').forEach(b=>b.classList.toggle('on',edit.repeat.days.includes(+b.dataset.i)));}
+  const f=$('#f-freq').value,R=edit.repeat,k=$('#f-date').value||today(),pd=pdate(k);
+  const show=(sel,on)=>document.querySelectorAll('#ef '+sel).forEach(e=>e.classList.toggle('hide',!on));
+  const par=$('#f-par').value, season=$('#f-season').checked;
+  if(f==='weekly'&&!R.days.length)R.days=[dow(k)];
+  if(f==='monthly'){
+    if(!R.mdays.length)R.mdays=[pd.getDate()];
+    if(!R.nthDays.length)R.nthDays=[dow(k)];
+    if(!R.nth.length)R.nth=[pd.getDate()+7>dim(pd.getFullYear(),pd.getMonth())&&pd.getDate()>28?-1:Math.ceil(pd.getDate()/7)];
+  }
+  if(season&&!R.months.length)R.months=[pd.getMonth()+1];
+  show('.rep-box',f!=='none');
+  show('.rep-iv',f!=='none'&&f!=='workdays'&&!(f==='weekly'&&par));
+  show('.rep-week',f==='weekly');
+  show('.rep-month',f==='monthly');
+  show('.rep-mday',R.mmode!=='nth');
+  show('.rep-nth',R.mmode==='nth');
+  show('.rep-months',season);
+  show('.rep-hint',f!=='none'&&edit.type==='task');
+  const iv=Math.max(1,parseInt($('#f-int').value)||1);
+  const forms={daily:['день','дня','дней'],weekly:['неделю','недели','недель'],monthly:['месяц','месяца','месяцев'],yearly:['год','года','лет']}[f];
+  $('#iv-unit').textContent=forms?plural(iv,forms):'';
+  const mark=(act,attr,arr)=>document.querySelectorAll(`#ef [data-act="${act}"]`).forEach(b=>b.classList.toggle('on',arr.includes(+b.dataset[attr])));
+  mark('wday','i',R.days);mark('mday','d',R.mdays);mark('nth','n',R.nth);mark('nthday','i',R.nthDays);mark('rmonth','m',R.months);
+  document.querySelectorAll('#ef [data-act="mmode"]').forEach(b=>b.classList.toggle('on',b.dataset.m===(R.mmode||'day')));
+  updPrev();
+}
+function readRepeat(f){
+  const R=edit.repeat,until=$('#f-until').value||'',months=$('#f-season').checked?R.months.slice().sort((a,b)=>a-b):[];
+  if(f==='none')return {freq:'none',interval:1,days:[],until:''};
+  if(f==='workdays')return {freq:'weekly',interval:1,days:[0,1,2,3,4],until,par:'',months};
+  const o={freq:f,interval:Math.max(1,Math.min(999,parseInt($('#f-int').value)||1)),until,months,days:[]};
+  if(f==='weekly'){o.days=R.days.slice().sort();o.par=$('#f-par').value;if(o.par)o.interval=1;}
+  if(f==='monthly'){o.mmode=R.mmode==='nth'?'nth':'day';
+    if(o.mmode==='nth'){o.nth=nthSort(R.nth);o.nthDays=R.nthDays.slice().sort();}
+    else o.mdays=nthSort(R.mdays);}
+  return o;
+}
+function updPrev(){
+  const el=$('#rep-prev');if(!el)return;
+  const f=$('#f-freq').value;if(f==='none'){el.innerHTML='';return;}
+  const start=$('#f-date').value||today(),tmp={date:start,repeat:readRepeat(f)},out=[],ty=pdate(today()).getFullYear();
+  let k=start<today()?today():start;
+  for(let i=0;i<6;i++){const n=nextOcc(tmp,k,false);if(!n)break;out.push(n);k=addDays(n,1);}
+  el.innerHTML=`<div class="rp-l">↻ ${esc(repLabel(tmp.repeat))}</div>`+(out.length
+    ?`<div class="rp-d">Ближайшие: ${out.map(x=>`${WD[dow(x)].toLowerCase()} ${dayMonth(x)}${pdate(x).getFullYear()!==ty?' '+pdate(x).getFullYear():''}`).join(' · ')}</div>`
+    :'<div class="rp-d late">Под эти условия не попадает ни одна дата</div>');
 }
 function readSubs(it,k){
   const subs=[],doneIds=[];
@@ -770,8 +892,9 @@ function saveItem(){
     if(f==='none')it.repeat={freq:'none',interval:1,days:[],until:''};
     else{
       if(!it.date)it.date=today();
-      if(f==='workdays')it.repeat={freq:'weekly',interval:1,days:[0,1,2,3,4],until:$('#f-until').value||''};
-      else it.repeat={freq:f,interval:Math.max(1,Math.min(99,parseInt($('#f-int').value)||1)),days:f==='weekly'?edit.repeat.days.slice().sort():[],until:$('#f-until').value||''};
+      const rr=readRepeat(f);
+      if(!nextOcc({date:it.date,repeat:rr},it.date,false)){toast('Под эти условия не попадает ни одна дата');return;}
+      it.repeat=rr;
     }
     if(!isRep(it)){delete it.doneDates;delete it.subDone;delete it.skip;}
     if(it.type==='task')readSubs(it,editCtx.k||it.date);
@@ -862,6 +985,10 @@ function openSettings(){
     <div class="fl"><label>Время этих уведомлений<div class="hint">и задач без точного времени</div></label><input type="time" id="s-morn" value="${esc(s.morning)}"></div>
     <div class="fl"><label>Проверить уведомления</label><button type="button" class="btn sm" data-act="testnotif">Через 5 сек</button></div>
   </div>
+  ${window.Native&&Native.checkUpdate?`<div class="fld">
+    <div class="fl"><label>Интерфейс<div class="hint">${(()=>{const t=+Native.uiUpdatedAt();return t?'обновлён '+relDay(dkey(new Date(t)))+' в '+new Date(t).toTimeString().slice(0,5):'встроенная версия';})()} · обновляется сам</div></label><button type="button" class="btn sm" data-act="checkupd">Проверить</button></div>
+    <div class="fl"><label>Приложение ${esc(Native.appVersion())}<div class="hint">переустанавливать нужно, только если я скажу</div></label><button type="button" class="btn sm" data-act="openapk">Скачать APK</button></div>
+  </div>`:''}
   <div class="fld">
     <div class="fl"><label>Резервная копия<div class="hint">отправьте себе в мессенджер или почту</div></label><button type="button" class="btn sm" data-act="export">Сохранить</button></div>
     <div class="fl"><label>Восстановить из файла</label><button type="button" class="btn sm" data-act="importfile">Выбрать</button></div>
@@ -1007,7 +1134,12 @@ document.addEventListener('click',e=>{
       syncTypeUI();break;
     case 'nodate':$('#f-date').value='';break;
     case 'notime':$('#f-time').value='';if($('#f-end'))$('#f-end').value='';break;
-    case 'wday':{const i=+d.i,ds=edit.repeat.days;const j=ds.indexOf(i);if(j>=0){if(ds.length>1)ds.splice(j,1);}else ds.push(i);el.classList.toggle('on',ds.includes(i));break;}
+    case 'wday':toggleIn(edit.repeat.days,+d.i);syncRepUI();break;
+    case 'mday':toggleIn(edit.repeat.mdays,+d.d);syncRepUI();break;
+    case 'nth':toggleIn(edit.repeat.nth,+d.n);syncRepUI();break;
+    case 'nthday':toggleIn(edit.repeat.nthDays,+d.i);syncRepUI();break;
+    case 'rmonth':toggleIn(edit.repeat.months,+d.m);syncRepUI();break;
+    case 'mmode':edit.repeat.mmode=d.m;syncRepUI();break;
     case 'prio':edit.prio=+d.i;el.parentNode.querySelectorAll('.chip').forEach(b=>b.classList.toggle('on',b===el));break;
     case 'color':edit.color=d.c;el.parentNode.querySelectorAll('.sw').forEach(b=>b.classList.toggle('on',b===el));break;
     case 'icon':edit.icon=d.e;el.parentNode.querySelectorAll('.emo').forEach(b=>b.classList.toggle('on',b===el));break;
@@ -1020,6 +1152,9 @@ document.addEventListener('click',e=>{
     case 'saveperson':savePerson();break;
     case 'delperson':deletePerson();break;
     case 'savesettings':saveSettings();break;
+    case 'checkupd':toast('Проверяю…');Native.checkUpdate();break;
+    case 'openapk':Native.openApk();break;
+    case 'applyupd':$('#updbar').classList.add('hide');try{Native.reload();}catch(e){location.reload();}break;
     case 'testnotif':if(window.Native&&Native.test){Native.test();toast('Уведомление придёт через 5 секунд');}else toast('Уведомления работают только в приложении на телефоне');break;
     case 'export':doExport();break;
     case 'importfile':$('#s-file').click();break;
@@ -1041,7 +1176,12 @@ window.__resume=()=>{if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.__resume();});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);
 
+/* обновления интерфейса */
+window.__updateReady=()=>{$('#updbar').classList.remove('hide');};
+window.__updateResult=r=>{if(r===1){closeSheet();window.__updateReady();}else if(r===0)toast('У вас последняя версия');else toast('Не удалось проверить — нет интернета?');};
+
 applyTheme();render();scheduleNow();
+try{if(window.Native&&Native.ready)Native.ready();}catch(e){}
 </script>
 </body>
 </html>

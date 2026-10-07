@@ -7,6 +7,8 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -14,11 +16,14 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-/** Единственный экран: веб-интерфейс из assets/www + мост к системе (Native). */
+/** Единственный экран: веб-интерфейс + мост к системе (Native). */
 public class MainActivity extends Activity {
     private static final int REQ_FILE = 11;
+    private final Handler ui = new Handler(Looper.getMainLooper());
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
+    private boolean fromCache;
+    volatile boolean pageReady;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,8 +44,22 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri u = request.getUrl();
                 if ("file".equals(u.getScheme())) return false;
-                try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception ignored) { }
+                openExternal(u.toString());
                 return true;
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                // Страховка: если скачанная версия интерфейса не запустилась — вернуться к встроенной.
+                if (fromCache) {
+                    ui.postDelayed(() -> {
+                        if (!pageReady && fromCache) {
+                            Updater.rejectCached(MainActivity.this);
+                            fromCache = false;
+                            web.loadUrl(Updater.ASSET_URL);
+                        }
+                    }, 6000);
+                }
             }
         });
 
@@ -69,7 +88,35 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
         }
 
-        web.loadUrl("file:///android_asset/www/index.html");
+        loadUi();
+        checkForUpdate(false);
+    }
+
+    /** Загрузить интерфейс: скачанную версию, если есть, иначе встроенную. */
+    void loadUi() {
+        String url = Updater.startUrl(this);
+        fromCache = !url.equals(Updater.ASSET_URL);
+        pageReady = false;
+        web.loadUrl(url);
+    }
+
+    /** Проверка обновления интерфейса в фоне. manual — нажата кнопка «Проверить». */
+    void checkForUpdate(boolean manual) {
+        if (!manual && !Updater.due(this)) return;
+        new Thread(() -> {
+            int r = Updater.check(getApplicationContext());
+            ui.post(() -> {
+                if (web == null) return;
+                if (manual) web.evaluateJavascript("window.__updateResult&&window.__updateResult(" + r + ")", null);
+                else if (r == Updater.UPDATED) web.evaluateJavascript("window.__updateReady&&window.__updateReady()", null);
+            });
+        }).start();
+    }
+
+    void openExternal(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception ignored) { }
     }
 
     @Override
@@ -88,7 +135,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (web != null) web.evaluateJavascript("window.__resume&&window.__resume()", null);
+        if (web != null) {
+            web.evaluateJavascript("window.__resume&&window.__resume()", null);
+            checkForUpdate(false);
+        }
     }
 
     @SuppressWarnings("deprecation")

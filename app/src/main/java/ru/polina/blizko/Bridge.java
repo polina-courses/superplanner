@@ -1,6 +1,5 @@
 package ru.polina.blizko;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.view.View;
@@ -9,10 +8,45 @@ import android.webkit.JavascriptInterface;
 
 /** Методы, доступные из JavaScript как window.Native.* */
 public class Bridge {
-    private final Activity activity;
+    private final MainActivity activity;
 
-    Bridge(Activity activity) {
+    Bridge(MainActivity activity) {
         this.activity = activity;
+    }
+
+    /** Интерфейс загрузился и работает. */
+    @JavascriptInterface
+    public void ready() {
+        activity.pageReady = true;
+    }
+
+    /** Перезагрузить интерфейс (применить скачанное обновление). */
+    @JavascriptInterface
+    public void reload() {
+        activity.runOnUiThread(activity::loadUi);
+    }
+
+    /** Проверить обновление интерфейса; ответ придёт в window.__updateResult(1|0|-1). */
+    @JavascriptInterface
+    public void checkUpdate() {
+        activity.runOnUiThread(() -> activity.checkForUpdate(true));
+    }
+
+    /** Время последнего обновления интерфейса из интернета, мс (0 — встроенная версия). */
+    @JavascriptInterface
+    public double uiUpdatedAt() {
+        return Updater.updatedAt(activity);
+    }
+
+    @JavascriptInterface
+    public String appVersion() {
+        return Updater.appVersionName(activity);
+    }
+
+    /** Открыть ссылку на свежий APK в браузере. */
+    @JavascriptInterface
+    public void openApk() {
+        activity.runOnUiThread(() -> activity.openExternal(Updater.APK_URL));
     }
 
     @JavascriptInterface
