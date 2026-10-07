@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-07d">
+<meta name="blizko-ui" content="2026-10-07f">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -161,6 +161,8 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.m .moved{color:var(--accent)}
+.m .shopm{color:var(--accent);font-weight:600}
 .calsw{display:flex;gap:8px;margin-bottom:10px}
 .calsw .grow{flex:1}
 .calsw .seg button{display:flex;align-items:center;justify-content:center;gap:6px}
@@ -358,7 +360,7 @@ const hid=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))
 
 const DEFCATS=()=>[{id:'home',name:'Дом',color:'#D9922E'},{id:'work',name:'Работа',color:'#3A6EA5'},{id:'me',name:'Личное',color:'#7A9A3A'},{id:'family',name:'Семья',color:'#B5487A'}];
 let S=load();
-function blank(){return {v:1,items:[],people:[],cats:DEFCATS(),settings:{theme:'auto',morning:'09:00',agenda:true,agendaTime:'08:00',nBday:true,defRemind:'15',cdBdays:true,tip:true}};}
+function blank(){return {v:1,items:[],people:[],cats:DEFCATS(),settings:{theme:'auto',morning:'09:00',agenda:true,agendaTime:'08:00',nBday:true,defRemind:'15',carry:'task',cdBdays:true,tip:true}};}
 function load(){
   let raw=null;
   try{if(window.Native&&Native.load)raw=Native.load();}catch(e){}
@@ -392,8 +394,54 @@ function setDone(it,k,v){
 function subDone(it,sid,k){return isRep(it)?((it.subDone||{})[k]||[]).includes(sid):!!(it.subs.find(s=>s.id===sid)||{}).done;}
 function subCount(it,k){if(!it.subs||!it.subs.length)return null;let n=0;for(const s of it.subs)if(subDone(it,s.id,k))n++;return [n,it.subs.length];}
 
+/* ============ покупки к делам ============ */
+const SHOP_DAYS=7;
+const shopList=it=>it&&it.needShop&&(it.type==='task'||it.type==='event')?(it.shop||[]):[];
+function shopBought(it,sid,k){return isRep(it)?((it.shopDone||{})[k]||[]).includes(sid):!!((it.shop||[]).find(x=>x.id===sid)||{}).done;}
+function setBought(it,sid,k,v){
+  if(isRep(it)){it.shopDone=it.shopDone||{};const a=(it.shopDone[k]||[]).filter(x=>x!==sid);if(v)a.push(sid);it.shopDone[k]=a;}
+  else{const x=(it.shop||[]).find(x=>x.id===sid);if(x)x.done=v;}
+}
+const shopLeft=(it,k)=>shopList(it).filter(x=>!shopBought(it,x.id,k));
+/* ближайшие дела в пределах недели, к которым ещё не всё куплено */
+function shopDue(from){
+  const out=[];
+  for(const it of S.items){if(!shopList(it).length)continue;
+    const k=nextOcc(it,from,true);if(!k||diffDays(from,k)>SHOP_DAYS)continue;
+    const left=shopLeft(it,k);if(left.length)out.push({it,k,left});}
+  return out.sort((a,b)=>a.k.localeCompare(b.k));
+}
+
+/* ============ перенос ============ */
+const canCarry=it=>{const c=S.settings.carry||'off';return !isRep(it)&&it.date&&!it.done&&((it.type==='task'&&c!=='off')||(it.type==='event'&&c==='all'));};
+/* невыполненное из прошлых дней переезжает на сегодня */
+function carryOver(){
+  const t=today();let n=0;
+  for(const it of S.items){if(!canCarry(it)||it.date>=t)continue;
+    if(!it.origDate)it.origDate=it.date;it.date=t;it.moved=(it.moved||0)+1;n++;}
+  return n;
+}
+/* перенести запись (или одно повторение) на другую дату */
+function moveItem(it,k,to){
+  if(!to)return;
+  if(isRep(it)){
+    it.skip=(it.skip||[]).filter(x=>x!==k).concat(k);
+    const c=JSON.parse(JSON.stringify(it));
+    Object.assign(c,{id:uid(),date:to,repeat:{freq:'none',interval:1,days:[],until:''},done:false,origDate:k,moved:1,fromId:it.id});
+    delete c.doneDates;delete c.skip;delete c.subDone;
+    if(c.shopDone){const b=(it.shopDone||{})[k]||[];c.shop=(c.shop||[]).map(x=>({...x,done:b.includes(x.id)}));delete c.shopDone;}
+    c.subs=(c.subs||[]).map(s=>({...s,done:false}));
+    S.items.push(c);
+  }else{
+    if(!it.origDate)it.origDate=it.date;
+    it.date=to;it.moved=(it.moved||0)+1;it.done=false;
+    if(it.origDate===to){delete it.origDate;it.moved=0;}
+  }
+  save();render();toast('Перенесено на '+relDay(to));
+}
+
 /* ============ привычки и цели ============ */
-const isCheck=it=>it.type==='task'||it.type==='habit';
+const isCheck=it=>it.type==='task'||it.type==='habit'||it.type==='event';
 function habitStreak(it){
   let k=today(),n=0,first=true;
   for(let i=0;i<1500;i++){
@@ -466,8 +514,10 @@ function metaFor(it,k,showDate){
   if(it.type==='habit'){const st=habitStreak(it);if(st>0)m.push(`🔥 ${st}`);}
   if(isRep(it))m.push('↻ '+repLabel(it.repeat));
   const sc=subCount(it,k);if(sc)m.push(`☑ ${sc[0]}/${sc[1]}`);
+  const sl=shopList(it);if(sl.length&&k){const b=sl.length-shopLeft(it,k).length;m.push(`<span class="${b<sl.length?'shopm':''}">🛒 ${b}/${sl.length}</span>`);}
   if(it.remind!=null&&it.remind!=='')m.push('🔔');
   if(it.cd)m.push('⏳');
+  if(it.moved&&!isRep(it)&&it.origDate&&it.origDate!==it.date)m.push(`<span class="moved">↷ с ${dayMonth(it.origDate)}</span>`);
   if(it.notes&&!m.length)m.push(esc(it.notes.split('\n')[0]).slice(0,60));
   return m.map(x=>x.startsWith('<span')?x:`<span>${x}</span>`).join('');
 }
@@ -505,8 +555,11 @@ function vToday(){
   if(S.settings.tip&&!S.items.length&&!S.people.length)
     h+=`<div class="tip"><b>Добро пожаловать</b>Нажмите «+», чтобы добавить задачу или событие. На вкладке «Люди» можно записать дни рождения близких. Все данные хранятся только на этом телефоне.</div>`;
   const over=S.items.filter(it=>it.type==='task'&&!isRep(it)&&it.date&&it.date<k&&!it.done).sort((a,b)=>a.date.localeCompare(b.date));
-  if(over.length)h+=section('Просрочено',over.map(it=>row(it,it.date,true)).join(''),'warn',`<span class="n">${over.length}</span>`);
+  if(over.length)h+=section('Просрочено',over.map(it=>row(it,it.date,true).replace(/<\/div>$/,`<button class="btn sm" data-act="quickmove" data-id="${it.id}" data-k="${it.date}">На сегодня</button></div>`)).join(''),'warn',`<span class="n">${over.length}</span>`);
   h+=dayBlock(k,'План на сегодня');
+  const sd=shopDue(k);
+  if(sd.length)h+=section('Нужно купить',sd.map(({it,k:d,left})=>{const n=diffDays(k,d);
+    return `<div class="row" data-act="shop" data-id="${it.id}" data-k="${d}"><span class="ava" style="background:${it.color||COLORS[1]};font-size:19px">🛒</span><div class="txt"><div class="t">${esc(left.map(x=>x.t).join(', '))}</div><div class="m"><span>к «${esc(it.title)}»</span></div></div><span class="badge">${n===0?'сегодня':n===1?'завтра':'через '+n+' '+plural(n,['день','дня','дней'])}</span></div>`;}).join(''));
   if(hb.length)h+=section('Привычки',hb.map(it=>row(it,k)).join(''),'',`<span class="n">${hb.length-hl} из ${hb.length}</span>`);
   h+=dayBlock(addDays(k,1),'Завтра');
   h+=soonBlock(k);
@@ -636,6 +689,14 @@ function vGoals(){
   if(fin.length)h+=section('Достигнутые',fin.map(card).join(''));
   return h;
 }
+function openShop(id,k){
+  const it=S.items.find(i=>i.id===id);if(!it)return;
+  const rows=()=>shopList(it).map(x=>{const b=shopBought(it,x.id,k);return `<div class="row" data-act="buy" data-sid="${x.id}"><button class="chk ${b?'on':''}" style="--c:${it.color||COLORS[1]}" data-act="buy" data-sid="${x.id}"></button><div class="txt"><div class="t ${b?'done':''}">${esc(x.t)}</div></div></div>`;}).join('');
+  openSheet(`<div class="shead"><h3>🛒 Купить</h3></div><p class="muted" style="margin:0 4px 10px">к «${esc(it.title)}», ${relDay(k)}${it.time?' в '+esc(it.time):''}</p><div class="card" id="shoplist">${rows()}</div>
+  <div class="actions"><button type="button" class="btn ghost" data-act="shopedit">Изменить список</button><button type="button" class="btn pri" data-act="close">Готово</button></div>`);
+  shopCtx={id,k,rows};
+}
+let shopCtx=null;
 function openGoalAdd(id){
   const it=S.items.find(i=>i.id===id);if(!it)return;
   openSheet(`<div class="shead"><h3>${esc(it.title)}</h3></div><p class="muted" style="margin:0 4px 10px">Сейчас: ${goalText(it)}</p>
@@ -738,6 +799,8 @@ function openItem(id,preset={},ctxK=''){
   <form id="ef" onsubmit="return false">
   <div class="seg" id="typeseg" style="margin-bottom:10px">${TYPES.map(([t,l])=>`<button type="button" class="${edit.type===t?'on':''}" data-act="etype" data-t="${t}">${l}</button>`).join('')}</div>
   <div class="fld"><input type="text" id="f-title" class="title-in" placeholder="Название" value="${esc(edit.title)}" autocomplete="off"></div>
+  ${src&&(src.type==='task'||src.type==='event')&&src.date&&!isDone(src,k)?`<div class="fld"><div class="fl"><label>Перенести${isRep(src)?'<div class="hint">только '+relDay(k)+', серия не изменится</div>':''}</label></div>
+    <div class="chips" style="padding-top:0">${[[today(),'На сегодня'],[addDays(today(),1),'На завтра'],[addDays(k<today()?today():k,7),'+ неделя']].filter(([d])=>d!==k).map(([d,l])=>`<button type="button" class="chip" data-act="moveto" data-to="${d}">${l}</button>`).join('')}<label class="chip" style="position:relative;overflow:hidden">Дата…<input type="date" id="f-moveto" style="position:absolute;inset:0;opacity:0"></label></div></div>`:''}
   <div class="fld" data-only="task event habit">
     <div class="fl"><label><span data-only="task event">Дата</span><span data-only="habit">Начиная с</span></label><input type="date" id="f-date" value="${esc(edit.date||'')}"><button type="button" class="x" data-only="task" data-act="nodate" title="Без даты">×</button></div>
     <div class="fl"><label><span data-only="task habit">Время</span><span data-only="event">Начало</span></label><input type="time" id="f-time" value="${esc(edit.time||'')}"><button type="button" class="x" data-act="notime" title="Без времени">×</button></div>
@@ -775,6 +838,13 @@ function openItem(id,preset={},ctxK=''){
     <div class="fl"><label>Важность</label></div>
     <div class="chips" style="padding-top:0">${PRIO.map((p,i)=>`<button type="button" class="chip ${(edit.prio||0)===i?'on':''}" data-act="prio" data-i="${i}">${p}</button>`).join('')}</div>
   </div>
+  <div class="fld" data-only="task event">
+    <div class="fl"><label>Нужны покупки<div class="hint">напомню за неделю, что докупить</div></label><span class="toggle"><input type="checkbox" id="f-needshop" ${edit.needShop?'checked':''}><span></span></span></div>
+    <div id="shopbox" class="${edit.needShop?'':'hide'}">
+      <div id="shops">${(edit.shop||[]).map(x=>shopRow(x,shopBought(edit,x.id,k))).join('')}</div>
+      <div style="padding:6px 0 10px"><button type="button" class="btn sm" data-act="addshop">+ что купить</button></div>
+    </div>
+  </div>
   <div class="fld" id="substeps" data-only="task goal">
     <div class="fl"><label><span data-only="task">Подпункты</span><span data-only="goal">Шаги к цели</span><div class="hint rep-hint">отметки сбрасываются в каждый новый раз</div></label><button type="button" class="btn sm" data-act="addsub">+ пункт</button></div>
     <div id="subs">${edit.subs.map(s=>subRow(s,subDone(edit,s.id,k))).join('')}</div>
@@ -799,6 +869,8 @@ function openItem(id,preset={},ctxK=''){
   const ef=$('#ef'),watch=['f-freq','f-int','f-par','f-season','f-until','f-date'];
   ef.addEventListener('change',e=>{if(watch.includes(e.target.id))syncRepUI();});
   ef.addEventListener('input',e=>{if(e.target.id==='f-int')syncRepUI();});
+  $('#f-needshop').addEventListener('change',e=>{$('#shopbox').classList.toggle('hide',!e.target.checked);if(e.target.checked&&!$('#shops').children.length)$('[data-act="addshop"]').click();});
+  const mv=$('#f-moveto');if(mv)mv.addEventListener('change',()=>{const it=S.items.find(i=>i.id===edit.id);if(!it||!mv.value)return;sheetOnClose=null;closeSheet();moveItem(it,editCtx.k||it.date,mv.value);});
   if(!src)setTimeout(()=>$('#f-title')&&$('#f-title').focus(),250);
 }
 function syncTypeUI(){
@@ -819,6 +891,7 @@ function addCategory(name){
   const used=S.cats.map(c=>c.color),color=COLORS.find(c=>!used.includes(c))||COLORS[S.cats.length%COLORS.length];
   const c={id:uid(),name,color};S.cats.push(c);save();return c;
 }
+const shopRow=(x,b)=>`<div class="sub shop" data-sid="${x.id}"><button type="button" class="chk ${b?'on':''}" data-act="subchk"></button><input type="text" value="${esc(x.t)}" placeholder="Что купить"><button type="button" class="x" data-act="delsub">×</button></div>`;
 const subRow=(s,done)=>`<div class="sub" data-sid="${s.id}"><button type="button" class="chk ${done?'on':''}" data-act="subchk"></button><input type="text" value="${esc(s.t)}" placeholder="Подпункт"><button type="button" class="x" data-act="delsub">×</button></div>`;
 function toggleIn(arr,v){const j=arr.indexOf(v);if(j>=0){if(arr.length>1)arr.splice(j,1);}else arr.push(v);}
 function syncRepUI(){
@@ -869,6 +942,14 @@ function updPrev(){
     ?`<div class="rp-d">Ближайшие: ${out.map(x=>`${WD[dow(x)].toLowerCase()} ${dayMonth(x)}${pdate(x).getFullYear()!==ty?' '+pdate(x).getFullYear():''}`).join(' · ')}</div>`
     :'<div class="rp-d late">Под эти условия не попадает ни одна дата</div>');
 }
+function readShop(it,k){
+  const list=[],bought=[];
+  document.querySelectorAll('#shops .sub').forEach(el=>{const t=el.querySelector('input').value.trim();if(!t)return;
+    const id=el.dataset.sid,on=el.querySelector('.chk').classList.contains('on');list.push({id,t,done:isRep(it)?false:on});if(on)bought.push(id);});
+  it.shop=list;it.needShop=$('#f-needshop').checked&&list.length>0;
+  if(isRep(it)&&k){it.shopDone=it.shopDone||{};it.shopDone[k]=bought;}
+  if(!it.needShop){delete it.shopDone;}
+}
 function readSubs(it,k){
   const subs=[],doneIds=[];
   document.querySelectorAll('#subs .sub').forEach(el=>{const t=el.querySelector('input').value.trim();if(!t)return;
@@ -908,9 +989,10 @@ function saveItem(){
       it.repeat=rr;
     }
     if(!isRep(it)){delete it.doneDates;delete it.subDone;delete it.skip;}
+    if(it.type==='task'||it.type==='event')readShop(it,editCtx.k||it.date);
+    else{it.needShop=false;it.shop=[];delete it.shopDone;}
     if(it.type==='task')readSubs(it,editCtx.k||it.date);
     else{it.subs=[];it.prio=0;delete it.subDone;}
-    if(it.type==='event'){delete it.done;delete it.doneDates;}
   }
   const i=S.items.findIndex(x=>x.id===it.id);
   if(i>=0)S.items[i]=it;else S.items.push(it);
@@ -972,6 +1054,7 @@ function openSettings(){
   openSheet(`
   <div class="shead"><h3>Настройки</h3></div>
   <div class="fld">
+    <div class="fl"><label>Автоперенос<div class="hint">невыполненное переезжает на сегодня</div></label><select id="s-carry">${[['off','Выключен'],['task','Задачи'],['all','Задачи и события']].map(([v,l])=>`<option value="${v}" ${(s.carry||'off')===v?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="fl"><label>Тема</label><select id="s-theme">${[['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']].map(([v,l])=>`<option value="${v}" ${s.theme===v?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="fl"><label>Напоминание у новых событий</label><select id="s-defrem">${REMS.map(([v,l])=>`<option value="${v}" ${String(s.defRemind)===v?'selected':''}>${l}</option>`).join('')}</select></div>
   </div>
@@ -1001,9 +1084,9 @@ function openSettings(){
 }
 function saveSettings(){
   const s=S.settings;
-  s.theme=$('#s-theme').value;s.defRemind=$('#s-defrem').value;s.agenda=$('#s-agenda').checked;s.agendaTime=$('#s-agt').value||'08:00';
+  s.carry=$('#s-carry').value;s.theme=$('#s-theme').value;s.defRemind=$('#s-defrem').value;s.agenda=$('#s-agenda').checked;s.agendaTime=$('#s-agt').value||'08:00';
   s.nBday=$('#s-nbd').checked;s.morning=$('#s-morn').value||'09:00';
-  applyTheme();save();closeSheet();render();
+  applyTheme();carryOver();save();closeSheet();render();
 }
 function doExport(){
   const j=JSON.stringify(S,null,1), name=`blizko-${today()}.json`;
@@ -1059,6 +1142,10 @@ function buildAlarms(){
     }
     if(s.nBday)for(const p of S.people)if(bdayOn(p,k)){const t=atMs(k,s.morning),a=ageOn(p,k);
       if(t>now)out.push({id:hid('b'+p.id+k),at:t,ch:'day',title:'🎂 День рождения',text:p.name+(a!=null?` — исполняется ${a} ${plural(a,['год','года','лет'])}`:'')});}
+    for(const it of S.items){if(!shopList(it).length||!occursOn(it,k)||isDone(it,k))continue;
+      const left=shopLeft(it,k);if(!left.length)continue;
+      const t=atMs(addDays(k,-SHOP_DAYS),s.morning);
+      if(t>now)out.push({id:hid('s'+it.id+k),at:t,ch:'day',title:`🛒 Через неделю: ${it.title}`,text:'Нужно купить: '+left.map(x=>x.t).join(', ')});}
     if(s.agenda){const its=itemsOn(k).filter(it=>!(isCheck(it)&&isDone(it,k)));const t=atMs(k,s.agendaTime);
       if(its.length&&t>now)out.push({id:hid('a'+k),at:t,ch:'day',title:`План на сегодня: ${its.length} ${plural(its.length,['пункт','пункта','пунктов'])}`,text:its.slice(0,6).map(it=>(it.time?it.time+' ':'')+it.title).join(' · ')});}
   }
@@ -1101,6 +1188,8 @@ document.addEventListener('click',e=>{
       if(it.type==='habit'&&d.k&&d.k>today()){toast('Этот день ещё не наступил');break;}const k=d.k||it.date||today();
       const v=!isDone(it,k);setDone(it,k,v);save();render();if(v)toast(isRep(it)?'Готово на '+relDay(k):'Готово');break;}
     case 'edit':openItem(d.id,{},d.k);break;
+    case 'quickmove':{e.stopPropagation();const it=S.items.find(i=>i.id===d.id);if(it)moveItem(it,d.k,today());break;}
+    case 'moveto':{const it=S.items.find(i=>i.id===edit.id);if(!it)break;sheetOnClose=null;closeSheet();moveItem(it,editCtx.k||it.date,d.to);break;}
     case 'person':openPerson(d.pid);break;
     case 'sel':cal.sel=d.k;if(cal.mode==='month'&&pdate(d.k).getMonth()!==pdate(cal.cur).getMonth())cal.cur=d.k;render();break;
     case 'calprev':case 'calnext':{const s=a==='calprev'?-1:1;
@@ -1143,6 +1232,12 @@ document.addEventListener('click',e=>{
     case 'icon':edit.icon=d.e;el.parentNode.querySelectorAll('.emo').forEach(b=>b.classList.toggle('on',b===el));break;
     case 'addsub':{const w=document.createElement('div');w.innerHTML=subRow({id:uid(),t:''},false);const n=w.firstChild;$('#subs').appendChild(n);n.querySelector('input').focus();break;}
     case 'subchk':el.classList.toggle('on');break;
+    case 'addshop':{const w=document.createElement('div');w.innerHTML=shopRow({id:uid(),t:''},false);const n=w.firstChild;$('#shops').appendChild(n);n.querySelector('input').focus();break;}
+    case 'shop':openShop(d.id,d.k);break;
+    case 'buy':{e.stopPropagation();if(!shopCtx)break;const it=S.items.find(i=>i.id===shopCtx.id);if(!it)break;
+      setBought(it,d.sid,shopCtx.k,!shopBought(it,d.sid,shopCtx.k));save();$('#shoplist').innerHTML=shopCtx.rows();render();
+      if(!shopLeft(it,shopCtx.k).length)toast('Всё куплено 🎉');break;}
+    case 'shopedit':{const c=shopCtx;sheetOnClose=null;closeSheet();setTimeout(()=>openItem(c.id,{},c.k),230);break;}
     case 'delsub':el.closest('.sub').remove();break;
     case 'saveitem':saveItem();break;
     case 'delitem':deleteItem();break;
@@ -1170,7 +1265,8 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
 window.__back=()=>{if(sheetOpen){closeSheet();return true;}if(tab!=='today'){tab='today';render();return true;}return false;};
 /* возврат в приложение: обновить «сегодня» и перепланировать */
 let lastDay=today();
-window.__resume=()=>{if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today();}if(!sheetOpen)render();scheduleNow();};
+window.__resume=()=>{if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today();}if(carryOver())save();if(!sheetOpen)render();scheduleNow();};
+setInterval(()=>{if(today()!==lastDay)window.__resume();},60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.__resume();});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);
 
@@ -1178,6 +1274,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme)
 window.__updateReady=()=>{$('#updbar').classList.remove('hide');};
 window.__updateResult=r=>{if(r===1){closeSheet();window.__updateReady();}else if(r===0)toast('У вас последняя версия');else toast('Не удалось проверить — нет интернета?');};
 
+if(carryOver())save();
 applyTheme();render();scheduleNow();
 try{if(window.Native&&Native.ready)Native.ready();}catch(e){}
 </script>
