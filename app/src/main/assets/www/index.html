@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-07b">
+<meta name="blizko-ui" content="2026-10-07d">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -98,6 +98,8 @@ nav button.on .pill{background:var(--soft);color:var(--accent)}
 .cell.sel{background:var(--soft)}
 .dots{display:flex;gap:3px;margin-top:5px;height:6px}
 .dots i{width:6px;height:6px;border-radius:3px;display:block}
+.dots i.o{border:1.5px solid;background:transparent}
+.dots i.o.f{opacity:.45}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .week .cell{aspect-ratio:auto;padding:8px 0 10px;background:var(--card);border:1px solid var(--line)}
 .week .cell.sel{background:var(--soft);border-color:transparent}
@@ -159,6 +161,12 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.calsw{display:flex;gap:8px;margin-bottom:10px}
+.calsw .grow{flex:1}
+.calsw .seg button{display:flex;align-items:center;justify-content:center;gap:6px}
+.calsw .seg svg{width:18px;height:18px}
+.calsw .icons{flex:none}
+.calsw .icons button{width:44px;flex:none;padding:7px 0}
 .updbar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:30;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 10px 10px 14px;display:flex;align-items:center;gap:10px;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:616px;margin:0 auto}
 .updbar span{flex:1}
 .chips.mdays{gap:6px}
@@ -344,14 +352,13 @@ const COLORS=['#C2552D','#D9922E','#7A9A3A','#2E8B7A','#3A6EA5','#6B5CA5','#B548
 const EMOJI=['📌','✅','🛒','💼','🏠','💊','🧘','🏃','📚','💡','🎉','🎁','✈️','🚗','🐾','🧹','💰','📞','🍽️','💄','🧵','👧','❤️','⭐'];
 const PRIO=['Нет','Низко','Средне','Обязательно'];
 const REMS=[['','Без напоминания'],['0','В момент начала'],['5','За 5 минут'],['15','За 15 минут'],['30','За 30 минут'],['60','За 1 час'],['120','За 2 часа'],['1440','За 1 день'],['2880','За 2 дня'],['10080','За неделю']];
-const EVERY=[[0,'Не напоминать'],[7,'Раз в неделю'],[14,'Раз в 2 недели'],[30,'Раз в месяц'],[60,'Раз в 2 месяца'],[90,'Раз в 3 месяца'],[180,'Раз в полгода'],[365,'Раз в год']];
 const catOf=it=>it&&it.cat?S.cats.find(c=>c.id===it.cat):null;
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const hid=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h&0x7fffffff)||1;};
 
 const DEFCATS=()=>[{id:'home',name:'Дом',color:'#D9922E'},{id:'work',name:'Работа',color:'#3A6EA5'},{id:'me',name:'Личное',color:'#7A9A3A'},{id:'family',name:'Семья',color:'#B5487A'}];
 let S=load();
-function blank(){return {v:1,items:[],people:[],cats:DEFCATS(),settings:{theme:'auto',morning:'09:00',agenda:true,agendaTime:'08:00',nBday:true,nPeople:true,defRemind:'15',cdBdays:true,tip:true}};}
+function blank(){return {v:1,items:[],people:[],cats:DEFCATS(),settings:{theme:'auto',morning:'09:00',agenda:true,agendaTime:'08:00',nBday:true,defRemind:'15',cdBdays:true,tip:true}};}
 function load(){
   let raw=null;
   try{if(window.Native&&Native.load)raw=Native.load();}catch(e){}
@@ -426,7 +433,6 @@ function bdDate(p,year){if(!p.bd||!p.bd.m||!p.bd.d)return null;const day=Math.mi
 function bdayOn(p,k){return !!p.bd&&bdDate(p,pdate(k).getFullYear())===k;}
 function nextBday(p,from){if(!p.bd||!p.bd.m)return null;const y=pdate(from).getFullYear();let k=bdDate(p,y);if(k<from)k=bdDate(p,y+1);return k;}
 function ageOn(p,k){return p.bd&&p.bd.y?pdate(k).getFullYear()-p.bd.y:null;}
-function contactDue(p){if(!p.every)return null;return p.last?addDays(p.last,p.every):today();}
 const initials=n=>n.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
 
 /* ============ отрисовка ============ */
@@ -481,11 +487,6 @@ function bdayRow(p,k){
   const a=ageOn(p,k);
   return `<div class="row" data-act="person" data-pid="${p.id}"><span class="ava" style="background:${p.color||COLORS[6]}">${esc(initials(p.name))}</span><div class="txt"><div class="t">🎂 ${esc(p.name)}</div><div class="m"><span>${a!=null?`исполняется ${a} ${plural(a,['год','года','лет'])}`:'день рождения'}</span></div></div></div>`;
 }
-function contactRow(p){
-  const due=contactDue(p),late=diffDays(due,today());
-  const ago=p.last?`последний раз ${relDay(p.last)}`:'ещё не отмечали';
-  return `<div class="row" data-act="person" data-pid="${p.id}"><span class="ava" style="background:${p.color||COLORS[4]}">${esc(initials(p.name))}</span><div class="txt"><div class="t">${esc(p.name)}</div><div class="m"><span>${ago}</span>${late>0?`<span class="late">просрочено на ${late} ${plural(late,['день','дня','дней'])}</span>`:''}</div></div><button class="btn sm" data-act="met" data-pid="${p.id}">Связались</button></div>`;
-}
 function dayBlock(k,label){
   const its=itemsOn(k).filter(it=>it.type!=='habit'), bd=S.people.filter(p=>bdayOn(p,k));
   let b=its.map(it=>row(it,k)).join('')+bd.map(p=>bdayRow(p,k)).join('');
@@ -502,13 +503,11 @@ function vToday(){
   if(hb.length)sm.push(hl?`${hl} ${plural(hl,['привычка','привычки','привычек'])}`:'привычки выполнены 🔥');
   let h=`<div class="hero"><div class="wd">${WDL[dow(k)]}</div><div class="dm">${dayMonth(k)}</div><div class="sm">${sm.join(' · ')||'Свободный день'}</div></div>`;
   if(S.settings.tip&&!S.items.length&&!S.people.length)
-    h+=`<div class="tip"><b>Добро пожаловать</b>Нажмите «+», чтобы добавить задачу или событие. На вкладке «Люди» можно записать дни рождения и отметить, как часто хочется общаться с человеком. Все данные хранятся только на этом телефоне.</div>`;
+    h+=`<div class="tip"><b>Добро пожаловать</b>Нажмите «+», чтобы добавить задачу или событие. На вкладке «Люди» можно записать дни рождения близких. Все данные хранятся только на этом телефоне.</div>`;
   const over=S.items.filter(it=>it.type==='task'&&!isRep(it)&&it.date&&it.date<k&&!it.done).sort((a,b)=>a.date.localeCompare(b.date));
   if(over.length)h+=section('Просрочено',over.map(it=>row(it,it.date,true)).join(''),'warn',`<span class="n">${over.length}</span>`);
   h+=dayBlock(k,'План на сегодня');
   if(hb.length)h+=section('Привычки',hb.map(it=>row(it,k)).join(''),'',`<span class="n">${hb.length-hl} из ${hb.length}</span>`);
-  const due=S.people.filter(p=>p.every&&contactDue(p)<=k);
-  if(due.length)h+=section('Пора связаться',due.map(contactRow).join(''));
   h+=dayBlock(addDays(k,1),'Завтра');
   h+=soonBlock(k);
   return h;
@@ -529,8 +528,14 @@ function soonBlock(k){
     return `<div class="row" ${x.act}>${x.html}<div class="txt"><div class="t">${x.t}</div><div class="m"><span>${x.m}</span></div></div><span class="badge">через ${n} ${plural(n,['день','дня','дней'])}</span></div>`;}).join(''));
 }
 
-let cal={mode:'month',cur:today(),sel:today()};
+let cal={mode:'month',cur:today(),sel:today(),view:'items'};
+const habitsOn=k=>S.items.filter(it=>it.type==='habit'&&occursOn(it,k)).sort(cmp);
 function dots(k){
+  if(cal.view==='habits'){
+    const t=today(),hs=habitsOn(k).slice(0,5);
+    return `<div class="dots">${hs.map(it=>{const c=it.color||COLORS[0],dn=isDone(it,k);
+      return dn?`<i style="background:${c}"></i>`:`<i class="o ${k>t?'f':''}" style="border-color:${c}"></i>`;}).join('')}</div>`;
+  }
   const c=[];for(const it of S.items){if(c.length>=4)break;if(it.type!=='habit'&&occursOn(it,k))c.push(it.color||COLORS[0]);}
   if(c.length<4&&S.people.some(p=>bdayOn(p,k)))c.push('#B5487A');
   return `<div class="dots">${c.map(x=>`<i style="background:${x}"></i>`).join('')}</div>`;
@@ -555,10 +560,19 @@ function vCal(){
     body+='</div>';
   }
   let h=`<div class="calbar"><button class="iconbtn" data-act="calprev"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><div class="title">${title}</div><button class="btn sm ghost" data-act="caltoday">Сегодня</button><button class="iconbtn" data-act="calnext"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>`;
-  h+=`<div class="seg" style="margin-bottom:10px"><button class="${cal.mode==='month'?'on':''}" data-act="calmode" data-m="month">Месяц</button><button class="${cal.mode==='week'?'on':''}" data-act="calmode" data-m="week">Неделя</button></div>`;
+  const IM='<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M9.2 9.5v11M14.8 9.5v11M3.5 15h17"/></svg>';
+  const IW='<svg viewBox="0 0 24 24"><rect x="3.5" y="8" width="17" height="8" rx="2.5"/><path d="M7.8 8v8M12 8v8M16.2 8v8"/></svg>';
+  const ID='<svg viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="M3.8 6.5l1.2 1.2L7 5.5M3.8 12l1.2 1.2L7 11M3.8 17.5l1.2 1.2L7 16.5"/></svg>';
+  const IH='<svg viewBox="0 0 24 24"><path d="M12 21c-4 0-7-2.7-7-6.6 0-3 1.8-5 3.6-6.6.4 1.8 1.4 3 2.6 3.4C11 7.5 12.5 4.6 15 3c-.3 3 1.2 4.6 2.5 6.2 1 1.3 1.5 2.7 1.5 4.6C19 18 16 21 12 21z"/></svg>';
+  h+=`<div class="calsw"><div class="seg grow"><button class="${cal.view==='items'?'on':''}" data-act="calview" data-v="items">${ID}<span>Дела</span></button><button class="${cal.view==='habits'?'on':''}" data-act="calview" data-v="habits">${IH}<span>Привычки</span></button></div><div class="seg icons"><button class="${cal.mode==='month'?'on':''}" data-act="calmode" data-m="month" aria-label="Месяц" title="Месяц">${IM}</button><button class="${cal.mode==='week'?'on':''}" data-act="calmode" data-m="week" aria-label="Неделя" title="Неделя">${IW}</button></div></div>`;
   h+=body;
   const sd=pdate(cal.sel);
-  h+=dayBlock(cal.sel,`${WDL[dow(cal.sel)]}, ${dayMonth(cal.sel)}${sd.getFullYear()!==pdate(t).getFullYear()?' '+sd.getFullYear():''}`);
+  const dl=`${WDL[dow(cal.sel)]}, ${dayMonth(cal.sel)}${sd.getFullYear()!==pdate(t).getFullYear()?' '+sd.getFullYear():''}`;
+  if(cal.view==='habits'){
+    const hs=habitsOn(cal.sel),dn=hs.filter(it=>isDone(it,cal.sel)).length;
+    if(!S.items.some(i=>i.type==='habit'))h+=section(dl,empty('Привычек пока нет. Добавьте через «+» → Привычка.'));
+    else h+=section(dl,hs.length?hs.map(it=>row(it,cal.sel)).join(''):empty('В этот день привычек по расписанию нет'),'',hs.length?`<span class="n">${dn} из ${hs.length}</span>`:'');
+  }else h+=dayBlock(cal.sel,dl);
   return h;
 }
 
@@ -652,23 +666,18 @@ function newOfType(t){
   },230);
 }
 
-let pf='bday';
+let pf='bday';/* сортировка людей: bday | abc */
 function vPeople(){
   const t=today();
-  let h=`<div class="seg" style="margin:4px 0 6px"><button class="${pf==='bday'?'on':''}" data-act="pf" data-f="bday">По дню рожд.</button><button class="${pf==='contact'?'on':''}" data-act="pf" data-f="contact">По общению</button><button class="${pf==='abc'?'on':''}" data-act="pf" data-f="abc">А–Я</button></div>`;
-  if(!S.people.length)return h+section('Люди',empty('Здесь будут близкие: дни рождения и напоминания поддерживать связь. Нажмите «+».'));
+  let h=`<div class="seg" style="margin:4px 0 6px"><button class="${pf==='bday'?'on':''}" data-act="pf" data-f="bday">По дню рожд.</button><button class="${pf==='abc'?'on':''}" data-act="pf" data-f="abc">А–Я</button></div>`;
+  if(!S.people.length)return h+section('Люди',empty('Здесь будут близкие: дни рождения, возраст и заметки о подарках. Нажмите «+».'));
   let list=S.people.slice();
   if(pf==='abc')list.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
-  else if(pf==='bday')list.sort((a,b)=>(nextBday(a,t)||'9999').localeCompare(nextBday(b,t)||'9999')||a.name.localeCompare(b.name,'ru'));
-  else list.sort((a,b)=>(contactDue(a)||'9999').localeCompare(contactDue(b)||'9999')||a.name.localeCompare(b.name,'ru'));
+  else list.sort((a,b)=>(nextBday(a,t)||'9999').localeCompare(nextBday(b,t)||'9999')||a.name.localeCompare(b.name,'ru'));
   h+=`<div class="card" style="margin-top:12px">`+list.map(p=>{
     const m=[];const nb=nextBday(p,t);
     if(nb){const n=diffDays(t,nb),a=ageOn(p,nb);m.push(`🎂 ${dayMonth(nb)}${n===0?' — сегодня!':` · через ${n} ${plural(n,['день','дня','дней'])}`}${a!=null?` · ${a} ${plural(a,['год','года','лет'])}`:''}`);}
-    let act='';
-    if(p.every){const due=contactDue(p),late=diffDays(due,t);
-      m.push(`📞 ${p.last?relDay(p.last):'не отмечено'} · ${(EVERY.find(e=>e[0]===p.every)||[0,'раз в '+p.every+' дн.'])[1].toLowerCase()}`);
-      if(late>=0)act=`<button class="btn sm" data-act="met" data-pid="${p.id}">Связались</button>`;}
-    else if(p.last)m.push(`📞 ${relDay(p.last)}`);
+    const act='';
     return `<div class="row" data-act="person" data-pid="${p.id}"><span class="ava" style="background:${p.color||COLORS[4]}">${esc(initials(p.name))}</span><div class="txt"><div class="t">${esc(p.name)}</div><div class="m">${m.map(x=>`<span>${x}</span>`).join('')||'<span>нет данных</span>'}</div></div>${act}</div>`;
   }).join('')+`</div>`;
   return h;
@@ -935,13 +944,8 @@ function openPerson(id){
       <select id="p-m"><option value="">месяц</option>${MG.map((m,i)=>`<option value="${i+1}" ${bd.m===i+1?'selected':''}>${m}</option>`).join('')}</select></div>
     <div class="fl"><label>Год рождения<div class="hint">чтобы видеть возраст; можно пропустить</div></label><input type="number" class="small" style="width:84px" id="p-y" min="1900" max="2100" value="${bd.y||''}" placeholder="—"></div>
   </div>
-  <div class="fld">
-    <div class="fl"><label>Поддерживать связь</label><select id="p-every">${EVERY.map(([v,l])=>`<option value="${v}" ${pedit.every===v?'selected':''}>${l}</option>`).join('')}</select></div>
-    <div class="fl"><label>Последний раз общались</label><input type="date" id="p-last" value="${esc(pedit.last||'')}"></div>
-  </div>
   <div class="fld"><div class="chips">${COLORS.map(c=>`<button type="button" class="sw ${pedit.color===c?'on':''}" style="background:${c}" data-act="pcolor" data-c="${c}"></button>`).join('')}</div>
     <textarea id="p-notes" placeholder="Заметки: что подарить, о чём спросить…">${esc(pedit.notes||'')}</textarea></div>
-  ${src&&(src.log||[]).length?`<p class="muted small" style="margin:4px 4px 0">Общались: ${src.log.slice(-6).reverse().map(relDay).join(', ')}</p>`:''}
   <div class="actions"><button type="button" class="btn ghost" data-act="close">Отмена</button><button type="button" class="btn pri" data-act="saveperson">Сохранить</button></div>`;
   openSheet(html);
   if(!src)setTimeout(()=>$('#p-name')&&$('#p-name').focus(),250);
@@ -952,18 +956,13 @@ function savePerson(){
   if((d&&!m)||(m&&!d)){toast('Укажите и день, и месяц');return;}
   if(d&&m&&d>dim(2024,m-1)){toast('В этом месяце нет такого числа');return;}
   const p=pedit;p.name=name;p.bd=d&&m?{d,m,y:y>=1900&&y<=2100?y:null}:null;
-  p.every=+$('#p-every').value||0;p.last=$('#p-last').value||'';p.notes=$('#p-notes').value.trim();
+  p.notes=$('#p-notes').value.trim();
   const i=S.people.findIndex(x=>x.id===p.id);if(i>=0)S.people[i]=p;else S.people.push(p);
   save();closeSheet();render();toast('Сохранено');
 }
 async function deletePerson(){
   const v=await ask('Удалить человека?',pedit.name,[{label:'Удалить',value:'y',cls:'danger'}]);
   if(!v)return;S.people=S.people.filter(p=>p.id!==pedit.id);save();render();toast('Удалено');
-}
-function markMet(pid){
-  const p=S.people.find(x=>x.id===pid);if(!p)return;const t=today();
-  p.last=t;p.log=(p.log||[]).filter(x=>x!==t).concat(t).slice(-50);
-  save();render();toast(`Отмечено: ${p.name}`);
 }
 
 /* ----- настройки ----- */
@@ -983,7 +982,6 @@ function openSettings(){
     <div class="fl"><label>Утренняя сводка дня</label>${tg('s-agenda',s.agenda)}</div>
     <div class="fl"><label>Время сводки</label><input type="time" id="s-agt" value="${esc(s.agendaTime)}"></div>
     <div class="fl"><label>Уведомлять о днях рождения</label>${tg('s-nbd',s.nBday)}</div>
-    <div class="fl"><label>Напоминать связаться с людьми</label>${tg('s-np',s.nPeople)}</div>
     <div class="fl"><label>Время этих уведомлений<div class="hint">и задач без точного времени</div></label><input type="time" id="s-morn" value="${esc(s.morning)}"></div>
     <div class="fl"><label>Проверить уведомления</label><button type="button" class="btn sm" data-act="testnotif">Через 5 сек</button></div>
   </div>
@@ -1004,7 +1002,7 @@ function openSettings(){
 function saveSettings(){
   const s=S.settings;
   s.theme=$('#s-theme').value;s.defRemind=$('#s-defrem').value;s.agenda=$('#s-agenda').checked;s.agendaTime=$('#s-agt').value||'08:00';
-  s.nBday=$('#s-nbd').checked;s.nPeople=$('#s-np').checked;s.morning=$('#s-morn').value||'09:00';
+  s.nBday=$('#s-nbd').checked;s.morning=$('#s-morn').value||'09:00';
   applyTheme();save();closeSheet();render();
 }
 function doExport(){
@@ -1067,9 +1065,6 @@ function buildAlarms(){
   for(const it of S.items){if(it.type!=='goal'||it.done||!it.due||it.remind==null||it.remind==='')continue;
     const t=atMs(it.due,s.morning)-(it.remind>=1440?it.remind*60000:0);
     if(t>now&&diffDays(k0,it.due)<=H)out.push({id:hid('g'+it.id+it.due),at:t,ch:'rem',title:'🎯 '+it.title,text:`Дедлайн ${relFrom(t,it.due)} · ${goalText(it)}`});}
-  if(s.nPeople)for(const p of S.people){if(!p.every)continue;let k=contactDue(p);if(k<k0)k=k0;let t=atMs(k,s.morning);
-    if(t<=now)t=atMs(addDays(k0,1),s.morning);
-    out.push({id:hid('p'+p.id),at:t,ch:'day',title:'📞 Пора связаться',text:p.name+(p.last?` · последний раз ${relDay(p.last)}`:'')});}
   out.sort((a,b)=>a.at-b.at);
   return out.slice(0,300);
 }
@@ -1102,17 +1097,18 @@ document.addEventListener('click',e=>{
     case 'gmode':edit.gmode=d.m;el.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===el));syncTypeUI();break;
     case 'nodue':$('#f-due').value='';break;
     case 'settings':openSettings();break;
-    case 'toggle':{e.stopPropagation();if(e.target.closest('.hab')&&!el.matches('.chk'))break;const it=S.items.find(i=>i.id===d.id);if(!it)break;const k=d.k||it.date||today();
+    case 'toggle':{e.stopPropagation();if(e.target.closest('.hab')&&!el.matches('.chk'))break;const it=S.items.find(i=>i.id===d.id);if(!it)break;
+      if(it.type==='habit'&&d.k&&d.k>today()){toast('Этот день ещё не наступил');break;}const k=d.k||it.date||today();
       const v=!isDone(it,k);setDone(it,k,v);save();render();if(v)toast(isRep(it)?'Готово на '+relDay(k):'Готово');break;}
     case 'edit':openItem(d.id,{},d.k);break;
     case 'person':openPerson(d.pid);break;
-    case 'met':e.stopPropagation();markMet(d.pid);break;
     case 'sel':cal.sel=d.k;if(cal.mode==='month'&&pdate(d.k).getMonth()!==pdate(cal.cur).getMonth())cal.cur=d.k;render();break;
     case 'calprev':case 'calnext':{const s=a==='calprev'?-1:1;
       if(cal.mode==='month'){const c=pdate(cal.cur);cal.cur=dkey(new Date(c.getFullYear(),c.getMonth()+s,1));}
       else{cal.cur=addDays(cal.cur,7*s);cal.sel=addDays(cal.sel,7*s);}
       render();break;}
     case 'caltoday':cal.cur=cal.sel=today();render();break;
+    case 'calview':cal.view=d.v;render();break;
     case 'calmode':cal.mode=d.m;cal.cur=cal.sel;render();break;
     case 'tf':tf=d.f;render();break;
     case 'tcat':tcat=d.id;render();break;
