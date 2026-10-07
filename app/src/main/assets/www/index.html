@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-07f">
+<meta name="blizko-ui" content="2026-10-07g">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -161,6 +161,14 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.uprow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:2px 0 10px}
+.up{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--c);border-radius:12px;padding:7px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;min-width:0;box-shadow:var(--shadow)}
+.up-n{display:flex;align-items:baseline;gap:3px;line-height:1}
+.up-n b{font-family:var(--serif);font-size:22px;font-weight:600}
+.up-n b.now{font-size:14px;color:var(--accent);font-family:inherit;padding:4px 0}
+.up-n i{font-style:normal;font-size:10.5px;color:var(--muted)}
+.up-t{font-size:12px;line-height:1.25;width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;min-height:30px}
+.up-d{font-size:10.5px;color:var(--muted)}
 .m .moved{color:var(--accent)}
 .m .shopm{color:var(--accent);font-weight:600}
 .calsw{display:flex;gap:8px;margin-bottom:10px}
@@ -593,6 +601,19 @@ function dots(k){
   if(c.length<4&&S.people.some(p=>bdayOn(p,k)))c.push('#B5487A');
   return `<div class="dots">${c.map(x=>`<i style="background:${x}"></i>`).join('')}</div>`;
 }
+/* 4 ближайших напоминания: дни рождения и всё с «Обратным отсчётом» */
+function upcoming(n){
+  const t=today(),e=[];
+  for(const p of S.people){const k=nextBday(p,t);if(k)e.push({k,icon:'🎂',title:p.name,c:p.color||COLORS[6],act:`data-act="person" data-pid="${p.id}"`});}
+  for(const it of S.items){if(!it.cd)continue;const k=nextDateFor(it,t);if(k)e.push({k,icon:it.icon||(it.type==='goal'?'🎯':'⏳'),title:it.title,c:it.color||COLORS[0],act:`data-act="edit" data-id="${it.id}" data-k="${k}"`});}
+  return e.sort((a,b)=>a.k.localeCompare(b.k)||a.title.localeCompare(b.title,'ru')).slice(0,n);
+}
+function upRow(){
+  const u=upcoming(4);if(!u.length)return '';
+  const t=today();
+  return `<div class="uprow">${u.map(x=>{const n=diffDays(t,x.k);
+    return `<button class="up" style="--c:${x.c}" ${x.act}><span class="up-n">${n===0?'<b class="now">сегодня</b>':n===1?'<b class="now">завтра</b>':`<b>${n}</b><i>${plural(n,['день','дня','дней'])}</i>`}</span><span class="up-t">${esc(x.icon)} ${esc(x.title)}</span><span class="up-d">${dayMonth(x.k)}</span></button>`;}).join('')}</div>`;
+}
 function vCal(){
   const t=today(),c=pdate(cal.cur);
   let title, body;
@@ -612,7 +633,8 @@ function vCal(){
       body+=`<button class="cell ${i>4?'we':''} ${k===t?'td':''} ${k===cal.sel?'sel':''}" data-act="sel" data-k="${k}"><span class="wdl">${WD[i]}</span><span class="num">${pdate(k).getDate()}</span>${dots(k)}</button>`;}
     body+='</div>';
   }
-  let h=`<div class="calbar"><button class="iconbtn" data-act="calprev"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><div class="title">${title}</div><button class="btn sm ghost" data-act="caltoday">Сегодня</button><button class="iconbtn" data-act="calnext"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>`;
+  let h=upRow();
+  h+=`<div class="calbar"><button class="iconbtn" data-act="calprev"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><div class="title">${title}</div><button class="btn sm ghost" data-act="caltoday">Сегодня</button><button class="iconbtn" data-act="calnext"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>`;
   const IM='<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M9.2 9.5v11M14.8 9.5v11M3.5 15h17"/></svg>';
   const IW='<svg viewBox="0 0 24 24"><rect x="3.5" y="8" width="17" height="8" rx="2.5"/><path d="M7.8 8v8M12 8v8M16.2 8v8"/></svg>';
   const ID='<svg viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><path d="M3.8 6.5l1.2 1.2L7 5.5M3.8 12l1.2 1.2L7 11M3.8 17.5l1.2 1.2L7 16.5"/></svg>';
