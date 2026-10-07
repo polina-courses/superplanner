@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,3 +27,12 @@ jobs:
         with:
           name: Blizko-APK
           path: Blizko.apk
+      - name: Выложить по постоянной ссылке
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete apk --yes --cleanup-tag || true
+          gh release create apk Blizko.apk --target "$GITHUB_SHA" --latest \
+            --title "Близко — последняя версия" \
+            --notes "Скачать: https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/Blizko.apk"
