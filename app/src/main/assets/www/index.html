@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-07g">
+<meta name="blizko-ui" content="2026-10-07h">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -161,6 +161,9 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.sub .sdate{display:none;flex:none;width:118px;font-size:12.5px;padding:6px 6px}
+#ef.is-goal .sub .sdate{display:block}
+.m .goalm{color:var(--accent)}
 .uprow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:2px 0 10px}
 .up{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--c);border-radius:12px;padding:7px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;min-width:0;box-shadow:var(--shadow)}
 .up-n{display:flex;align-items:baseline;gap:3px;line-height:1}
@@ -397,10 +400,36 @@ function isDone(it,k){return isRep(it)?(it.doneDates||[]).includes(k):!!it.done;
 function setDone(it,k,v){
   if(isRep(it)){it.doneDates=(it.doneDates||[]).filter(x=>x!==k);if(v)it.doneDates.push(k);
     if(it.doneDates.length>400)it.doneDates=it.doneDates.sort().slice(-400);}
-  else{it.done=v;it.doneAt=v?Date.now():null;}
+  else{it.done=v;it.doneAt=v?Date.now():null;if(it.goalId)stepDoneChanged(it);}
 }
 function subDone(it,sid,k){return isRep(it)?((it.subDone||{})[k]||[]).includes(sid):!!(it.subs.find(s=>s.id===sid)||{}).done;}
 function subCount(it,k){if(!it.subs||!it.subs.length)return null;let n=0;for(const s of it.subs)if(subDone(it,s.id,k))n++;return [n,it.subs.length];}
+
+/* ============ шаги целей = задачи в календаре ============ */
+const goalOf=it=>it&&it.goalId?S.items.find(g=>g.id===it.goalId&&g.type==='goal'):null;
+const stepTask=(g,sid)=>S.items.find(i=>i.goalId===g.id&&i.stepId===sid);
+/* актуальные дата и отметка шага берутся из его задачи */
+function pullSteps(g){for(const st of g.subs||[]){const t=stepTask(g,st.id);if(t){st.date=t.date;st.done=!!t.done;}else if(st.date&&st.linked){st.date='';}}}
+/* создать/обновить задачи для шагов с датой */
+function syncGoalSteps(g){
+  const keep=new Set();
+  if(g.gmode==='steps')for(const st of g.subs||[]){
+    if(!st.date)continue;keep.add(st.id);st.linked=true;
+    let t=stepTask(g,st.id);
+    if(!t){t={id:uid(),type:'task',goalId:g.id,stepId:st.id,time:'',end:'',repeat:{freq:'none',interval:1,days:[],until:''},prio:0,subs:[],notes:'',cd:false};S.items.push(t);}
+    if(t.date!==st.date){t.date=st.date;delete t.origDate;t.moved=0;}
+    Object.assign(t,{title:st.t,done:!!st.done,color:g.color,icon:g.icon||'🎯',cat:g.cat,remind:g.stepRemind??null});
+  }
+  for(const st of g.subs||[])if(!keep.has(st.id))delete st.linked;
+  S.items=S.items.filter(i=>!(i.goalId===g.id&&!keep.has(i.stepId)));
+}
+/* отметили задачу-шаг — обновить цель */
+function stepDoneChanged(t){
+  const g=goalOf(t);if(!g)return;
+  const st=(g.subs||[]).find(x=>x.id===t.stepId);if(st)st.done=!!t.done;
+  const was=!!g.done;g.done=goalProgress(g)>=1;if(g.done&&!was){g.doneAt=Date.now();toast('Цель достигнута 🎉');}
+  if(!g.done)g.doneAt=null;
+}
 
 /* ============ покупки к делам ============ */
 const SHOP_DAYS=7;
@@ -515,6 +544,7 @@ const empty=t=>`<div class="empty">${t}</div>`;
 
 function metaFor(it,k,showDate){
   const m=[];
+  if(it.goalId){const g=goalOf(it);if(g)m.push(`<span class="goalm">🎯 ${esc(g.title)}</span>`);}
   const ct=catOf(it);if(ct)m.push(`<span class="cat" style="--cc:${ct.color}">${esc(ct.name)}</span>`);
   if(showDate&&k){const n=diffDays(today(),k);m.push(`<span class="${n<0&&!isDone(it,k)?'late':''}">${relDay(k)}</span>`);}
   if(it.type==='event')m.push(it.time?esc(it.time+(it.end?'–'+it.end:'')):'весь день');
@@ -700,7 +730,9 @@ function vGoals(){
   const gs=S.items.filter(i=>i.type==='goal');
   if(!gs.length)return h+section('Цели',empty('Цель можно разбить на шаги или отслеживать числом: «накопить 50 000 ₽», «прочитать 12 книг». Нажмите «+».'));
   const card=it=>{
+    pullSteps(it);
     const pr=goalProgress(it),c=it.color||COLORS[0],m=[goalText(it)];
+    if(it.gmode==='steps'&&!it.done){const nx=(it.subs||[]).filter(x=>!x.done&&x.date).sort((a,b)=>a.date.localeCompare(b.date))[0];if(nx)m.push(`<span class="${nx.date<today()?'late':''}">→ ${esc(nx.t)}, ${relDay(nx.date)}</span>`);}
     if(it.due&&!it.done){const n=diffDays(t,it.due);m.push(n<0?`<span class="late">дедлайн прошёл ${dayMonth(it.due)}</span>`:n===0?'<span class="late">дедлайн сегодня</span>':`до ${dayMonth(it.due)} · ${n} ${plural(n,['день','дня','дней'])}`);}
     else if(it.done&&it.doneAt)m.push('достигнута '+relDay(dkey(new Date(it.doneAt))));
     return `<div class="row goal" data-act="edit" data-id="${it.id}"><span class="ava" style="background:${c};font-size:20px">${esc(it.icon||'🎯')}</span><div class="txt"><div class="t">${esc(it.title)}</div><div class="m">${m.map(x=>x.startsWith('<span')?x:`<span>${x}</span>`).join('')}</div><div class="pbar"><i style="width:${Math.round(pr*100)}%;background:${c}"></i></div></div><span class="pct">${Math.round(pr*100)}%</span>${it.gmode==='num'&&!it.done?`<button class="btn sm" data-act="gadd" data-id="${it.id}">+</button>`:''}</div>`;
@@ -812,6 +844,7 @@ function openItem(id,preset={},ctxK=''){
   edit.repeat=Object.assign({freq:'none',interval:1,days:[],until:'',mmode:'day',mdays:[],nth:[],nthDays:[],par:'',months:[]},edit.repeat||{});
   for(const f of ['days','mdays','nth','nthDays','months'])edit.repeat[f]=(edit.repeat[f]||[]).slice();
   edit.subs=edit.subs||[];edit.gmode=edit.gmode||'steps';
+  if(src&&edit.type==='goal')pullSteps(edit);
   editCtx={isNew:!src,k:ctxK};
   let freq=edit.repeat.freq;
   if(freq==='weekly'&&+edit.repeat.interval===1&&!edit.repeat.par&&edit.repeat.days.slice().sort().join()==='0,1,2,3,4')freq='workdays';
@@ -855,7 +888,7 @@ function openItem(id,preset={},ctxK=''){
     <div class="fl g-num"><label>Уже есть</label><input type="number" class="small" style="width:110px" id="f-cur" min="0" step="any" value="${esc(edit.cur??0)}"></div>
     <div class="fl g-num"><label>Единица<div class="hint">₽, книг, км…</div></label><input type="text" id="f-unit" style="width:110px;background:var(--card2);border-radius:10px;padding:8px 10px;text-align:center" value="${esc(edit.unit||'')}" placeholder="—"></div>
   </div>
-  <div class="fld"><div class="fl"><label>Напоминание<div class="hint" data-only="goal">относительно дедлайна</div></label><select id="f-rem">${REMS.map(([v,l])=>`<option value="${v}" ${String(edit.remind??'')===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
+  <div class="fld"><div class="fl"><label><span data-only="task event habit">Напоминание</span><span data-only="goal">Напоминание о дедлайне</span></label><select id="f-rem">${REMS.map(([v,l])=>`<option value="${v}" ${String(edit.remind??'')===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
   <div class="fld" data-only="task">
     <div class="fl"><label>Важность</label></div>
     <div class="chips" style="padding-top:0">${PRIO.map((p,i)=>`<button type="button" class="chip ${(edit.prio||0)===i?'on':''}" data-act="prio" data-i="${i}">${p}</button>`).join('')}</div>
@@ -867,6 +900,7 @@ function openItem(id,preset={},ctxK=''){
       <div style="padding:6px 0 10px"><button type="button" class="btn sm" data-act="addshop">+ что купить</button></div>
     </div>
   </div>
+  <div class="fld g-steps" data-only="goal"><div class="fl"><label>Напоминания о шагах<div class="hint">шаги с датой попадают в календарь как задачи</div></label><select id="f-srem">${[['','Без напоминания'],['0','В день шага'],['1440','За 1 день'],['2880','За 2 дня'],['10080','За неделю']].map(([v,l])=>`<option value="${v}" ${String(edit.stepRemind??'0')===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
   <div class="fld" id="substeps" data-only="task goal">
     <div class="fl"><label><span data-only="task">Подпункты</span><span data-only="goal">Шаги к цели</span><div class="hint rep-hint">отметки сбрасываются в каждый новый раз</div></label><button type="button" class="btn sm" data-act="addsub">+ пункт</button></div>
     <div id="subs">${edit.subs.map(s=>subRow(s,subDone(edit,s.id,k))).join('')}</div>
@@ -897,12 +931,13 @@ function openItem(id,preset={},ctxK=''){
 }
 function syncTypeUI(){
   const t=edit.type;
+  $('#ef').classList.toggle('is-goal',t==='goal');
   document.querySelectorAll('#ef [data-only]').forEach(el=>el.classList.toggle('hide',!el.dataset.only.split(' ').includes(t)));
   const none=$('#f-freq option[value="none"]');
   none.hidden=t==='habit';none.disabled=t==='habit';
   if(t==='habit'&&$('#f-freq').value==='none')$('#f-freq').value='daily';
   document.querySelectorAll('#ef .g-num').forEach(el=>el.classList.toggle('hide',t!=='goal'||edit.gmode!=='num'));
-  if(t==='goal')$('#substeps').classList.toggle('hide',edit.gmode!=='steps');
+  if(t==='goal'){$('#substeps').classList.toggle('hide',edit.gmode!=='steps');document.querySelectorAll('#ef .g-steps').forEach(el=>el.classList.toggle('hide',edit.gmode!=='steps'));}
   if(t==='event'&&!$('#f-date').value)$('#f-date').value=today();
   syncRepUI();
 }
@@ -914,7 +949,7 @@ function addCategory(name){
   const c={id:uid(),name,color};S.cats.push(c);save();return c;
 }
 const shopRow=(x,b)=>`<div class="sub shop" data-sid="${x.id}"><button type="button" class="chk ${b?'on':''}" data-act="subchk"></button><input type="text" value="${esc(x.t)}" placeholder="Что купить"><button type="button" class="x" data-act="delsub">×</button></div>`;
-const subRow=(s,done)=>`<div class="sub" data-sid="${s.id}"><button type="button" class="chk ${done?'on':''}" data-act="subchk"></button><input type="text" value="${esc(s.t)}" placeholder="Подпункт"><button type="button" class="x" data-act="delsub">×</button></div>`;
+const subRow=(s,done)=>`<div class="sub" data-sid="${s.id}"><button type="button" class="chk ${done?'on':''}" data-act="subchk"></button><input type="text" value="${esc(s.t)}" placeholder="Подпункт"><input type="date" class="sdate" value="${esc(s.date||'')}" title="Когда сделать"><button type="button" class="x" data-act="delsub">×</button></div>`;
 function toggleIn(arr,v){const j=arr.indexOf(v);if(j>=0){if(arr.length>1)arr.splice(j,1);}else arr.push(v);}
 function syncRepUI(){
   const f=$('#f-freq').value,R=edit.repeat,k=$('#f-date').value||today(),pd=pdate(k);
@@ -975,7 +1010,9 @@ function readShop(it,k){
 function readSubs(it,k){
   const subs=[],doneIds=[];
   document.querySelectorAll('#subs .sub').forEach(el=>{const t=el.querySelector('input').value.trim();if(!t)return;
-    const id=el.dataset.sid,on=el.querySelector('.chk').classList.contains('on');subs.push({id,t,done:isRep(it)?false:on});if(on)doneIds.push(id);});
+    const id=el.dataset.sid,on=el.querySelector('.chk').classList.contains('on');const o={id,t,done:isRep(it)?false:on};
+    if(it.type==='goal'){const dv=el.querySelector('.sdate').value;if(dv)o.date=dv;const old=(edit.subs||[]).find(x=>x.id===id);if(old&&old.linked)o.linked=true;}
+    subs.push(o);if(on)doneIds.push(id);});
   it.subs=subs;
   if(isRep(it)&&k){it.subDone=it.subDone||{};it.subDone[k]=doneIds;}
 }
@@ -994,7 +1031,7 @@ function saveItem(){
       const tg=parseFloat($('#f-target').value);
       if(!(tg>0)){toast('Укажите, сколько нужно набрать');$('#f-target').focus();return;}
       it.target=tg;it.cur=Math.max(0,parseFloat($('#f-cur').value)||0);it.unit=$('#f-unit').value.trim();
-    }else readSubs(it,'');
+    }else{readSubs(it,'');const sr=$('#f-srem').value;it.stepRemind=sr===''?null:+sr;}
     const was=!!it.done;it.done=goalProgress(it)>=1;
     if(it.done&&!was){it.doneAt=Date.now();}
   }else{
@@ -1018,6 +1055,8 @@ function saveItem(){
   }
   const i=S.items.findIndex(x=>x.id===it.id);
   if(i>=0)S.items[i]=it;else S.items.push(it);
+  if(it.type==='goal')syncGoalSteps(it);
+  if(it.goalId){const g=goalOf(it),st=g&&(g.subs||[]).find(x=>x.id===it.stepId);if(st){st.t=it.title;st.date=it.date;if(!it.date){delete st.linked;S.items=S.items.filter(x=>x.id!==it.id);}stepDoneChanged(it);}}
   save();closeSheet();render();toast(editCtx.isNew?'Добавлено':'Сохранено');
 }
 async function deleteItem(){
@@ -1025,11 +1064,15 @@ async function deleteItem(){
   const k=editCtx.k;
   let v;
   if(isRep(it)&&k)v=await ask('Удалить повторяющуюся запись?','',[{label:`Только ${relDay(k)}`,value:'one'},{label:'Эту и все следующие',value:'after',cls:'danger'},{label:'Всю серию',value:'all',cls:'danger'}]);
-  else v=await ask('Удалить запись?',it.title,[{label:'Удалить',value:'all',cls:'danger'}]);
+  else v=await ask('Удалить запись?',it.type==='goal'&&S.items.some(x=>x.goalId===it.id)?it.title+' — вместе с её шагами в календаре':it.goalId?it.title+' — шаг останется в цели, но без даты':it.title,[{label:'Удалить',value:'all',cls:'danger'}]);
   if(!v)return;
   if(v==='one'){it.skip=(it.skip||[]).concat(k);}
   else if(v==='after'){if(k<=it.date)S.items=S.items.filter(x=>x.id!==it.id);else it.repeat.until=addDays(k,-1);}
-  else S.items=S.items.filter(x=>x.id!==it.id);
+  else{
+    S.items=S.items.filter(x=>x.id!==it.id);
+    if(it.type==='goal')S.items=S.items.filter(x=>x.goalId!==it.id);
+    if(it.goalId){const g=goalOf(it),st=g&&(g.subs||[]).find(x=>x.id===it.stepId);if(st){st.date='';delete st.linked;}}
+  }
   save();render();toast('Удалено');
 }
 
