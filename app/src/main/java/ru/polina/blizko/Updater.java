@@ -67,7 +67,29 @@ final class Updater {
             sp.edit().putLong("vc", vc).remove("updated").apply();
         }
         File f = cached(c);
+        if (f.exists()) {
+            // Если во встроенном интерфейсе версия новее скачанной — берём встроенный.
+            try {
+                String cv = verOf(readFile(f)), av = verOf(asset(c));
+                if (!av.isEmpty() && av.compareTo(cv) > 0) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                    return ASSET_URL;
+                }
+            } catch (Exception ignored) { }
+        }
         return f.exists() ? "file://" + f.getAbsolutePath() : ASSET_URL;
+    }
+
+    /** Версия интерфейса из <meta name="blizko-ui" content="..."> (строка вида 2026-10-08f). */
+    static String verOf(byte[] data) {
+        String s = new String(data, 0, Math.min(data.length, 4000), StandardCharsets.UTF_8);
+        String key = "name=\"blizko-ui\" content=\"";
+        int i = s.indexOf(key);
+        if (i < 0) return "";
+        i += key.length();
+        int j = s.indexOf('"', i);
+        return j > i ? s.substring(i, j) : "";
     }
 
     /** Скачанная версия не запустилась — удалить её и больше не принимать. */
@@ -104,7 +126,11 @@ final class Updater {
                 return ERROR;
             }
             if (sha(data).equals(prefs(c).getString("bad", ""))) return SAME;
-            if (Arrays.equals(data, current(c))) return SAME;
+            byte[] cur = current(c);
+            if (Arrays.equals(data, cur)) return SAME;
+            // Не откатываться на более старую версию.
+            String rv = verOf(data), cv = verOf(cur);
+            if (!rv.isEmpty() && !cv.isEmpty() && rv.compareTo(cv) < 0) return SAME;
             File f = cached(c);
             //noinspection ResultOfMethodCallIgnored
             f.getParentFile().mkdirs();
@@ -131,6 +157,10 @@ final class Updater {
     private static byte[] current(Context c) throws Exception {
         File f = cached(c);
         if (f.exists()) return readFile(f);
+        return asset(c);
+    }
+
+    private static byte[] asset(Context c) throws Exception {
         try (InputStream in = c.getAssets().open("www/index.html")) {
             return readAll(in);
         }
