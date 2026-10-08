@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-07h">
+<meta name="blizko-ui" content="2026-10-08b">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -161,6 +161,20 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.spend{width:100%;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:0 0 10px;box-shadow:var(--shadow);text-align:left}
+.sp-l{flex:1;font-size:14px;display:flex;flex-direction:column}
+.sp-l i{font-style:normal;font-size:12px;color:var(--muted)}
+.spend b{font-family:var(--serif);font-size:20px;font-weight:600}
+.sp-a{color:var(--muted);font-size:20px}
+.sp-v{flex:none;font-size:15px}
+.sp-tot{background:var(--card2)}
+.cchip{display:inline-flex;align-items:center;gap:6px;border-color:color-mix(in srgb,var(--cc) 45%,var(--line))}
+.cchip .ci{font-size:15px;line-height:1}
+.cchip.on{background:var(--cc);border-color:var(--cc);color:#fff}
+.catrow{gap:10px}
+.cico{width:36px;height:36px;font-size:19px;flex:none}
+.iconpick{gap:6px;padding:8px 0 12px;border-top:1px solid var(--line)}
+.iconpick .emo{width:36px;height:36px;font-size:19px}
 .sub .sdate{display:none;flex:none;width:118px;font-size:12.5px;padding:6px 6px}
 #ef.is-goal .sub .sdate{display:block}
 .m .goalm{color:var(--accent)}
@@ -361,15 +375,28 @@ function repLabel(r){
 
 /* ============ состояние ============ */
 const KEY='blizko.v1';
-const COLORS=['#C2552D','#D9922E','#7A9A3A','#2E8B7A','#3A6EA5','#6B5CA5','#B5487A','#7A7065'];
-const EMOJI=['📌','✅','🛒','💼','🏠','💊','🧘','🏃','📚','💡','🎉','🎁','✈️','🚗','🐾','🧹','💰','📞','🍽️','💄','🧵','👧','❤️','⭐'];
+const COLORS=['#C2552D','#D9922E','#C9A227','#7A9A3A','#2E8B7A','#3A6EA5','#6B5CA5','#B5487A','#7A7065'];
+const NOCAT='#9A8F84';
+const EMOJI=['🏠','👧','🐾','💰','💊','💼','⭐','❤️','🛒','🧹','🚗','✈️','🎉','🎁','📚','🧘','🏃','🍽️','💄','🧵','💡','📞','🌿','📌'];
 const PRIO=['Нет','Низко','Средне','Обязательно'];
 const REMS=[['','Без напоминания'],['0','В момент начала'],['5','За 5 минут'],['15','За 15 минут'],['30','За 30 минут'],['60','За 1 час'],['120','За 2 часа'],['1440','За 1 день'],['2880','За 2 дня'],['10080','За неделю']];
 const catOf=it=>it&&it.cat?S.cats.find(c=>c.id===it.cat):null;
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const hid=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h&0x7fffffff)||1;};
 
-const DEFCATS=()=>[{id:'home',name:'Дом',color:'#D9922E'},{id:'work',name:'Работа',color:'#3A6EA5'},{id:'me',name:'Личное',color:'#7A9A3A'},{id:'family',name:'Семья',color:'#B5487A'}];
+const DEFCATS=()=>[{id:'home',name:'Дом',color:'#D9922E',icon:'🏠'},{id:'taika',name:'Тайка',color:'#B5487A',icon:'👧'},{id:'pets',name:'Животные',color:'#7A9A3A',icon:'🐾'},{id:'money',name:'Финансы',color:'#C9A227',icon:'💰'},{id:'health',name:'Здоровье',color:'#2E8B7A',icon:'💊'}];
+const KNOWNCAT={'дом':['#D9922E','🏠'],'тайка':['#B5487A','👧'],'животные':['#7A9A3A','🐾'],'финансы':['#C9A227','💰'],'здоровье':['#2E8B7A','💊'],'работа':['#3A6EA5','💼'],'личное':['#6B5CA5','⭐'],'семья':['#C2552D','❤️']};
+/* однократно: обязательные категории + иконки, вид записей берётся из категории */
+function migrateCats(d){
+  if(d.settings.catsV2)return;
+  const need=DEFCATS();
+  for(const n of need){const ex=d.cats.find(c=>c.name.trim().toLowerCase()===n.name.toLowerCase());if(!ex)d.cats.push(n);}
+  const order=need.map(n=>n.name.toLowerCase());
+  d.cats.sort((a,b)=>{const x=order.indexOf(a.name.toLowerCase()),y=order.indexOf(b.name.toLowerCase());return (x<0?99:x)-(y<0?99:y);});
+  for(const c of d.cats){const k=KNOWNCAT[c.name.trim().toLowerCase()];if(k){c.color=k[0];c.icon=k[1];}else if(!c.icon)c.icon='📌';}
+  for(const it of d.items){const c=d.cats.find(x=>x.id===it.cat);if(c){it.color=c.color;it.icon=c.icon;}}
+  d.settings.catsV2=true;
+}
 let S=load();
 function blank(){return {v:1,items:[],people:[],cats:DEFCATS(),settings:{theme:'auto',morning:'09:00',agenda:true,agendaTime:'08:00',nBday:true,defRemind:'15',carry:'task',cdBdays:true,tip:true}};}
 function load(){
@@ -386,6 +413,7 @@ function normalize(d){
   d.people=Array.isArray(d.people)?d.people:[];
   d.settings=Object.assign(b.settings,d.settings||{});
   d.cats=Array.isArray(d.cats)?d.cats:DEFCATS();
+  migrateCats(d);
   d.v=1;return d;
 }
 function save(){
@@ -433,7 +461,10 @@ function stepDoneChanged(t){
 
 /* ============ покупки к делам ============ */
 const SHOP_DAYS=7;
-const shopList=it=>it&&it.needShop&&(it.type==='task'||it.type==='event')?(it.shop||[]):[];
+const hasShop=it=>!!(it&&it.needShop&&(it.type==='task'||it.type==='event'));
+const shopList=it=>hasShop(it)?(it.shop||[]):[];
+const shopSum=it=>hasShop(it)&&+it.shopSum>0?+it.shopSum:0;
+const money=n=>Math.round(n).toLocaleString('ru-RU')+' ₽';
 function shopBought(it,sid,k){return isRep(it)?((it.shopDone||{})[k]||[]).includes(sid):!!((it.shop||[]).find(x=>x.id===sid)||{}).done;}
 function setBought(it,sid,k,v){
   if(isRep(it)){it.shopDone=it.shopDone||{};const a=(it.shopDone[k]||[]).filter(x=>x!==sid);if(v)a.push(sid);it.shopDone[k]=a;}
@@ -443,10 +474,29 @@ const shopLeft=(it,k)=>shopList(it).filter(x=>!shopBought(it,x.id,k));
 /* ближайшие дела в пределах недели, к которым ещё не всё куплено */
 function shopDue(from){
   const out=[];
-  for(const it of S.items){if(!shopList(it).length)continue;
+  for(const it of S.items){if(!hasShop(it)||it.shopRemind===false)continue;
     const k=nextOcc(it,from,true);if(!k||diffDays(from,k)>SHOP_DAYS)continue;
-    const left=shopLeft(it,k);if(left.length)out.push({it,k,left});}
+    const left=shopLeft(it,k);if(shopList(it).length&&!left.length)continue;
+    out.push({it,k,left});}
   return out.sort((a,b)=>a.k.localeCompare(b.k));
+}
+
+/* траты на ближайшие 7 дней (включая сегодня), без выполненных */
+function weekSpend(){
+  const t=today(),rows=[];let total=0;
+  for(let i=0;i<7;i++){const k=addDays(t,i);
+    for(const it of S.items){const v=shopSum(it);if(!v||!occursOn(it,k)||isDone(it,k))continue;total+=v;rows.push({it,k,v});}}
+  return {total,rows};
+}
+function spendBox(){
+  const w=weekSpend();if(!w.total)return '';
+  return `<button class="spend" data-act="spend"><span class="sp-l">💳 Траты на 7 дней<i>${w.rows.length} ${plural(w.rows.length,['покупка','покупки','покупок'])}</i></span><b>${money(w.total)}</b><span class="sp-a">›</span></button>`;
+}
+function openSpend(){
+  const w=weekSpend();
+  openSheet(`<div class="shead"><h3>💳 Траты на 7 дней</h3></div><div class="card">${w.rows.map(({it,k,v})=>`<div class="row" data-act="edit" data-id="${it.id}" data-k="${k}">${it.icon?`<span class="ico">${esc(it.icon)}</span>`:''}<div class="txt"><div class="t">${esc(it.title)}</div><div class="m"><span>${relDay(k)}${it.time?' в '+esc(it.time):''}</span></div></div><b class="sp-v">${money(v)}</b></div>`).join('')}
+  <div class="row sp-tot"><div class="txt"><div class="t"><b>Итого</b></div></div><b class="sp-v">${money(w.total)}</b></div></div>
+  <div class="actions"><button type="button" class="btn pri" data-act="close">Готово</button></div>`);
 }
 
 /* ============ перенос ============ */
@@ -552,6 +602,7 @@ function metaFor(it,k,showDate){
   if(it.type==='habit'){const st=habitStreak(it);if(st>0)m.push(`🔥 ${st}`);}
   if(isRep(it))m.push('↻ '+repLabel(it.repeat));
   const sc=subCount(it,k);if(sc)m.push(`☑ ${sc[0]}/${sc[1]}`);
+  const sv=shopSum(it);if(sv)m.push(`<span class="shopm">💳 ${money(sv)}</span>`);
   const sl=shopList(it);if(sl.length&&k){const b=sl.length-shopLeft(it,k).length;m.push(`<span class="${b<sl.length?'shopm':''}">🛒 ${b}/${sl.length}</span>`);}
   if(it.remind!=null&&it.remind!=='')m.push('🔔');
   if(it.cd)m.push('⏳');
@@ -596,8 +647,10 @@ function vToday(){
   if(over.length)h+=section('Просрочено',over.map(it=>row(it,it.date,true).replace(/<\/div>$/,`<button class="btn sm" data-act="quickmove" data-id="${it.id}" data-k="${it.date}">На сегодня</button></div>`)).join(''),'warn',`<span class="n">${over.length}</span>`);
   h+=dayBlock(k,'План на сегодня');
   const sd=shopDue(k);
-  if(sd.length)h+=section('Нужно купить',sd.map(({it,k:d,left})=>{const n=diffDays(k,d);
-    return `<div class="row" data-act="shop" data-id="${it.id}" data-k="${d}"><span class="ava" style="background:${it.color||COLORS[1]};font-size:19px">🛒</span><div class="txt"><div class="t">${esc(left.map(x=>x.t).join(', '))}</div><div class="m"><span>к «${esc(it.title)}»</span></div></div><span class="badge">${n===0?'сегодня':n===1?'завтра':'через '+n+' '+plural(n,['день','дня','дней'])}</span></div>`;}).join(''));
+  if(sd.length)h+=section('Скоро покупки',sd.map(({it,k:d,left})=>{const n=diffDays(k,d),sv=shopSum(it);
+    const title=left.length?left.map(x=>x.t).join(', '):it.title;
+    const meta=(left.length?`к «${esc(it.title)}»`:'')+(sv?(left.length?' · ':'')+money(sv):'')||'покупка';
+    return `<div class="row" data-act="shop" data-id="${it.id}" data-k="${d}"><span class="ava" style="background:${it.color||COLORS[1]};font-size:19px">🛒</span><div class="txt"><div class="t">${esc(title)}</div><div class="m"><span>${meta}</span></div></div><span class="badge">${n===0?'сегодня':n===1?'завтра':'через '+n+' '+plural(n,['день','дня','дней'])}</span></div>`;}).join(''));
   if(hb.length)h+=section('Привычки',hb.map(it=>row(it,k)).join(''),'',`<span class="n">${hb.length-hl} из ${hb.length}</span>`);
   h+=dayBlock(addDays(k,1),'Завтра');
   h+=soonBlock(k);
@@ -663,7 +716,7 @@ function vCal(){
       body+=`<button class="cell ${i>4?'we':''} ${k===t?'td':''} ${k===cal.sel?'sel':''}" data-act="sel" data-k="${k}"><span class="wdl">${WD[i]}</span><span class="num">${pdate(k).getDate()}</span>${dots(k)}</button>`;}
     body+='</div>';
   }
-  let h=upRow();
+  let h=upRow()+spendBox();
   h+=`<div class="calbar"><button class="iconbtn" data-act="calprev"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><div class="title">${title}</div><button class="btn sm ghost" data-act="caltoday">Сегодня</button><button class="iconbtn" data-act="calnext"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>`;
   const IM='<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M9.2 9.5v11M14.8 9.5v11M3.5 15h17"/></svg>';
   const IW='<svg viewBox="0 0 24 24"><rect x="3.5" y="8" width="17" height="8" rx="2.5"/><path d="M7.8 8v8M12 8v8M16.2 8v8"/></svg>';
@@ -687,7 +740,7 @@ function vTasks(){
   if(tcat!=='all'&&tcat!=='none'&&!S.cats.some(c=>c.id===tcat))tcat='all';
   const tasks=S.items.filter(i=>i.type==='task'&&(tcat==='all'||(tcat==='none'?!catOf(i):i.cat===tcat)));
   let h=`<div class="seg" style="margin:4px 0 6px"><button class="${tf==='active'?'on':''}" data-act="tf" data-f="active">Активные</button><button class="${tf==='done'?'on':''}" data-act="tf" data-f="done">Выполненные</button></div>`;
-  h+=`<div class="catbar"><button class="chip ${tcat==='all'?'on':''}" data-act="tcat" data-id="all">Все</button>${S.cats.map(c=>`<button class="chip ${tcat===c.id?'on':''}" data-act="tcat" data-id="${c.id}"><span class="dot" style="background:${c.color}"></span>${esc(c.name)}</button>`).join('')}<button class="chip ${tcat==='none'?'on':''}" data-act="tcat" data-id="none">Без категории</button></div>`;
+  h+=`<div class="catbar"><button class="chip ${tcat==='all'?'on':''}" data-act="tcat" data-id="all">Все</button>${S.cats.map(c=>`<button class="chip ${tcat===c.id?'on':''}" data-act="tcat" data-id="${c.id}">${esc(c.icon||'')} ${esc(c.name)}</button>`).join('')}<button class="chip ${tcat==='none'?'on':''}" data-act="tcat" data-id="none">Без категории</button></div>`;
   if(tf==='done'){
     const d=tasks.filter(i=>!isRep(i)&&i.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0)).slice(0,150);
     const r=tasks.filter(i=>isRep(i)&&(i.doneDates||[]).length).map(i=>[i,(i.doneDates||[]).slice().sort().pop()]).sort((a,b)=>b[1].localeCompare(a[1]));
@@ -746,8 +799,9 @@ function vGoals(){
 function openShop(id,k){
   const it=S.items.find(i=>i.id===id);if(!it)return;
   const rows=()=>shopList(it).map(x=>{const b=shopBought(it,x.id,k);return `<div class="row" data-act="buy" data-sid="${x.id}"><button class="chk ${b?'on':''}" style="--c:${it.color||COLORS[1]}" data-act="buy" data-sid="${x.id}"></button><div class="txt"><div class="t ${b?'done':''}">${esc(x.t)}</div></div></div>`;}).join('');
-  openSheet(`<div class="shead"><h3>🛒 Купить</h3></div><p class="muted" style="margin:0 4px 10px">к «${esc(it.title)}», ${relDay(k)}${it.time?' в '+esc(it.time):''}</p><div class="card" id="shoplist">${rows()}</div>
-  <div class="actions"><button type="button" class="btn ghost" data-act="shopedit">Изменить список</button><button type="button" class="btn pri" data-act="close">Готово</button></div>`);
+  const sv=shopSum(it);
+  openSheet(`<div class="shead"><h3>🛒 Покупка</h3></div><p class="muted" style="margin:0 4px 10px">«${esc(it.title)}», ${relDay(k)}${it.time?' в '+esc(it.time):''}${sv?` · <b style="color:var(--ink)">${money(sv)}</b>`:''}</p>${shopList(it).length?`<div class="card" id="shoplist">${rows()}</div>`:'<div id="shoplist"></div>'}
+  <div class="actions"><button type="button" class="btn ghost" data-act="shopedit">Изменить</button><button type="button" class="btn pri" data-act="close">Готово</button></div>`);
   shopCtx={id,k,rows};
 }
 let shopCtx=null;
@@ -775,7 +829,7 @@ function newOfType(t){
     if(t==='bday'){openPerson();return;}
     const date=tab==='cal'?cal.sel:tab==='tasks'&&t==='task'?'':today();
     const pre={type:t,date};
-    if(t==='goal'){pre.date='';pre.icon='🎯';}
+    if(t==='goal'){pre.date='';}
     if(tab==='count'&&t!=='habit')pre.cd=true;
     openItem(null,pre);
   },230);
@@ -838,7 +892,7 @@ const TYPES=[['task','Задача'],['event','Событие'],['habit','При
 const FREQS=[['none','Не повторять'],['daily','Каждый день'],['workdays','По будням'],['weekly','Каждую неделю'],['monthly','Каждый месяц'],['yearly','Каждый год']];
 function openItem(id,preset={},ctxK=''){
   const src=id?S.items.find(i=>i.id===id):null;
-  edit=src?JSON.parse(JSON.stringify(src)):Object.assign({id:uid(),type:'task',title:'',date:today(),time:'',end:'',repeat:{freq:'none',interval:1,days:[],until:''},prio:0,color:COLORS[0],icon:'',remind:null,subs:[],notes:'',cd:false,gmode:'steps',target:'',cur:0,unit:'',due:''},preset);
+  edit=src?JSON.parse(JSON.stringify(src)):Object.assign({id:uid(),type:'task',title:'',date:today(),time:'',end:'',repeat:{freq:'none',interval:1,days:[],until:''},prio:0,color:NOCAT,icon:'',remind:null,subs:[],notes:'',cd:false,gmode:'steps',target:'',cur:0,unit:'',due:''},preset);
   if(!src&&edit.type==='event'&&edit.remind==null&&S.settings.defRemind!=='')edit.remind=+S.settings.defRemind;
   if(!src&&edit.type==='habit'&&edit.repeat.freq==='none')edit.repeat={freq:'daily',interval:1,days:[],until:''};
   edit.repeat=Object.assign({freq:'none',interval:1,days:[],until:'',mmode:'day',mdays:[],nth:[],nthDays:[],par:'',months:[]},edit.repeat||{});
@@ -854,6 +908,11 @@ function openItem(id,preset={},ctxK=''){
   <form id="ef" onsubmit="return false">
   <div class="seg" id="typeseg" style="margin-bottom:10px">${TYPES.map(([t,l])=>`<button type="button" class="${edit.type===t?'on':''}" data-act="etype" data-t="${t}">${l}</button>`).join('')}</div>
   <div class="fld"><input type="text" id="f-title" class="title-in" placeholder="Название" value="${esc(edit.title)}" autocomplete="off"></div>
+  <div class="fld">
+    <div class="fl"><label>Категория</label><button type="button" class="btn sm ghost" data-act="newcat">+ новая</button></div>
+    <div class="chips" id="catchips" style="padding-top:0">${catChips(edit.cat)}</div>
+    <div class="newcat hide" id="newcat"><input type="text" id="nc-name" placeholder="Название категории" autocomplete="off"><button type="button" class="btn sm pri" data-act="addcat">Добавить</button></div>
+  </div>
   ${src&&(src.type==='task'||src.type==='event')&&src.date&&!isDone(src,k)?`<div class="fld"><div class="fl"><label>Перенести${isRep(src)?'<div class="hint">только '+relDay(k)+', серия не изменится</div>':''}</label></div>
     <div class="chips" style="padding-top:0">${[[today(),'На сегодня'],[addDays(today(),1),'На завтра'],[addDays(k<today()?today():k,7),'+ неделя']].filter(([d])=>d!==k).map(([d,l])=>`<button type="button" class="chip" data-act="moveto" data-to="${d}">${l}</button>`).join('')}<label class="chip" style="position:relative;overflow:hidden">Дата…<input type="date" id="f-moveto" style="position:absolute;inset:0;opacity:0"></label></div></div>`:''}
   <div class="fld" data-only="task event habit">
@@ -894,8 +953,11 @@ function openItem(id,preset={},ctxK=''){
     <div class="chips" style="padding-top:0">${PRIO.map((p,i)=>`<button type="button" class="chip ${(edit.prio||0)===i?'on':''}" data-act="prio" data-i="${i}">${p}</button>`).join('')}</div>
   </div>
   <div class="fld" data-only="task event">
-    <div class="fl"><label>Нужны покупки<div class="hint">напомню за неделю, что докупить</div></label><span class="toggle"><input type="checkbox" id="f-needshop" ${edit.needShop?'checked':''}><span></span></span></div>
+    <div class="fl"><label>Нужны покупки<div class="hint">сумма, напоминание, список</div></label><span class="toggle"><input type="checkbox" id="f-needshop" ${edit.needShop?'checked':''}><span></span></span></div>
     <div id="shopbox" class="${edit.needShop?'':'hide'}">
+      <div class="fl"><label>Сумма<div class="hint">попадёт в «Траты на 7 дней» в календаре</div></label><input type="number" class="small" style="width:110px" id="f-shopsum" min="0" step="any" inputmode="decimal" value="${+edit.shopSum>0?esc(edit.shopSum):''}" placeholder="₽"></div>
+      <div class="fl"><label>Напомнить за неделю<div class="hint">подсказка на главном и уведомление</div></label><span class="toggle"><input type="checkbox" id="f-shoprem" ${edit.shopRemind===false?'':'checked'}><span></span></span></div>
+      <div class="fl"><label>Что купить<div class="hint">можно не заполнять</div></label></div>
       <div id="shops">${(edit.shop||[]).map(x=>shopRow(x,shopBought(edit,x.id,k))).join('')}</div>
       <div style="padding:6px 0 10px"><button type="button" class="btn sm" data-act="addshop">+ что купить</button></div>
     </div>
@@ -904,15 +966,6 @@ function openItem(id,preset={},ctxK=''){
   <div class="fld" id="substeps" data-only="task goal">
     <div class="fl"><label><span data-only="task">Подпункты</span><span data-only="goal">Шаги к цели</span><div class="hint rep-hint">отметки сбрасываются в каждый новый раз</div></label><button type="button" class="btn sm" data-act="addsub">+ пункт</button></div>
     <div id="subs">${edit.subs.map(s=>subRow(s,subDone(edit,s.id,k))).join('')}</div>
-  </div>
-  <div class="fld">
-    <div class="fl"><label>Категория</label><button type="button" class="btn sm ghost" data-act="newcat">+ новая</button></div>
-    <div class="chips" id="catchips" style="padding-top:0">${catChips(edit.cat)}</div>
-    <div class="newcat hide" id="newcat"><input type="text" id="nc-name" placeholder="Название категории" autocomplete="off"><button type="button" class="btn sm pri" data-act="addcat">Добавить</button></div>
-  </div>
-  <div class="fld">
-    <div class="chips">${COLORS.map(c=>`<button type="button" class="sw ${edit.color===c?'on':''}" style="background:${c}" data-act="color" data-c="${c}"></button>`).join('')}</div>
-    <div class="chips" style="border-top:1px solid var(--line)"><button type="button" class="emo ${!edit.icon?'on':''}" data-act="icon" data-e="">—</button>${EMOJI.map(e=>`<button type="button" class="emo ${edit.icon===e?'on':''}" data-act="icon" data-e="${e}">${e}</button>`).join('')}</div>
   </div>
   <div class="fld">
     <div class="fl" data-only="task event goal"><label>Обратный отсчёт<div class="hint">показывать в «Скоро» и на вкладке «Отсчёт»</div></label><span class="toggle"><input type="checkbox" id="f-cd" ${edit.cd?'checked':''}><span></span></span></div>
@@ -925,7 +978,7 @@ function openItem(id,preset={},ctxK=''){
   const ef=$('#ef'),watch=['f-freq','f-int','f-par','f-season','f-until','f-date'];
   ef.addEventListener('change',e=>{if(watch.includes(e.target.id))syncRepUI();});
   ef.addEventListener('input',e=>{if(e.target.id==='f-int')syncRepUI();});
-  $('#f-needshop').addEventListener('change',e=>{$('#shopbox').classList.toggle('hide',!e.target.checked);if(e.target.checked&&!$('#shops').children.length)$('[data-act="addshop"]').click();});
+  $('#f-needshop').addEventListener('change',e=>{$('#shopbox').classList.toggle('hide',!e.target.checked);if(e.target.checked)setTimeout(()=>$('#f-shopsum').focus(),50);});
   const mv=$('#f-moveto');if(mv)mv.addEventListener('change',()=>{const it=S.items.find(i=>i.id===edit.id);if(!it||!mv.value)return;sheetOnClose=null;closeSheet();moveItem(it,editCtx.k||it.date,mv.value);});
   if(!src)setTimeout(()=>$('#f-title')&&$('#f-title').focus(),250);
 }
@@ -941,12 +994,12 @@ function syncTypeUI(){
   if(t==='event'&&!$('#f-date').value)$('#f-date').value=today();
   syncRepUI();
 }
-const catChips=sel=>`<button type="button" class="chip ${!sel?'on':''}" data-act="cat" data-id="">Без категории</button>`+S.cats.map(c=>`<button type="button" class="chip ${sel===c.id?'on':''}" data-act="cat" data-id="${c.id}"><span class="dot" style="background:${c.color}"></span>${esc(c.name)}</button>`).join('');
+const catChips=sel=>S.cats.map(c=>`<button type="button" class="chip cchip ${sel===c.id?'on':''}" style="--cc:${c.color}" data-act="cat" data-id="${c.id}"><span class="ci">${esc(c.icon||'📌')}</span>${esc(c.name)}</button>`).join('')+`<button type="button" class="chip cchip ${!sel?'on':''}" style="--cc:${NOCAT}" data-act="cat" data-id="">Без категории</button>`;
 function addCategory(name){
   name=name.trim();if(!name){toast('Введите название');return null;}
   const ex=S.cats.find(c=>c.name.toLowerCase()===name.toLowerCase());if(ex)return ex;
   const used=S.cats.map(c=>c.color),color=COLORS.find(c=>!used.includes(c))||COLORS[S.cats.length%COLORS.length];
-  const c={id:uid(),name,color};S.cats.push(c);save();return c;
+  const c={id:uid(),name,color,icon:'📌'};S.cats.push(c);save();return c;
 }
 const shopRow=(x,b)=>`<div class="sub shop" data-sid="${x.id}"><button type="button" class="chk ${b?'on':''}" data-act="subchk"></button><input type="text" value="${esc(x.t)}" placeholder="Что купить"><button type="button" class="x" data-act="delsub">×</button></div>`;
 const subRow=(s,done)=>`<div class="sub" data-sid="${s.id}"><button type="button" class="chk ${done?'on':''}" data-act="subchk"></button><input type="text" value="${esc(s.t)}" placeholder="Подпункт"><input type="date" class="sdate" value="${esc(s.date||'')}" title="Когда сделать"><button type="button" class="x" data-act="delsub">×</button></div>`;
@@ -1003,7 +1056,9 @@ function readShop(it,k){
   const list=[],bought=[];
   document.querySelectorAll('#shops .sub').forEach(el=>{const t=el.querySelector('input').value.trim();if(!t)return;
     const id=el.dataset.sid,on=el.querySelector('.chk').classList.contains('on');list.push({id,t,done:isRep(it)?false:on});if(on)bought.push(id);});
-  it.shop=list;it.needShop=$('#f-needshop').checked&&list.length>0;
+  it.shop=list;it.needShop=$('#f-needshop').checked;
+  const sv=parseFloat($('#f-shopsum').value);it.shopSum=sv>0?sv:null;it.shopRemind=$('#f-shoprem').checked;
+  if(!it.needShop){it.shopSum=null;}
   if(isRep(it)&&k){it.shopDone=it.shopDone||{};it.shopDone[k]=bought;}
   if(!it.needShop){delete it.shopDone;}
 }
@@ -1053,6 +1108,7 @@ function saveItem(){
     if(it.type==='task')readSubs(it,editCtx.k||it.date);
     else{it.subs=[];it.prio=0;delete it.subDone;}
   }
+  {const c=catOf(it);if(c){it.color=c.color;it.icon=c.icon||'';}else{it.color=NOCAT;it.icon=it.type==='goal'?'🎯':'';}}
   const i=S.items.findIndex(x=>x.id===it.id);
   if(i>=0)S.items[i]=it;else S.items.push(it);
   if(it.type==='goal')syncGoalSteps(it);
@@ -1171,19 +1227,22 @@ function importText(){
 /* ----- категории ----- */
 let catDraft=null;
 function openCats(){
-  catDraft=JSON.parse(JSON.stringify(S.cats));
-  openSheet(`<div class="shead"><h3>Категории</h3></div><p class="muted small" style="margin:0 4px 8px">Нажмите на кружок, чтобы сменить цвет.</p><div class="fld" id="catlist">${catRows()}</div>
+  catDraft=JSON.parse(JSON.stringify(S.cats));catPick=null;
+  openSheet(`<div class="shead"><h3>Категории</h3></div><p class="muted small" style="margin:0 4px 8px">Значок и цвет категории получают все её дела. Нажмите на значок, чтобы сменить его, на кружок — чтобы сменить цвет.</p><div class="fld" id="catlist">${catRows()}</div>
   <div class="newcat" style="padding:0 0 4px"><input type="text" id="cm-name" placeholder="Новая категория" autocomplete="off"><button type="button" class="btn sm" data-act="cmadd">Добавить</button></div>
   <div class="actions"><button type="button" class="btn ghost" data-act="close">Отмена</button><button type="button" class="btn pri" data-act="cmsave">Сохранить</button></div>`);
 }
-const catRows=()=>catDraft.length?catDraft.map(c=>`<div class="sub" data-cid="${c.id}"><button type="button" class="sw" style="background:${c.color};width:26px;height:26px;flex:none" data-act="cmcolor"></button><input type="text" value="${esc(c.name)}" placeholder="Название"><button type="button" class="x" data-act="cmdel">×</button></div>`).join(''):empty('Категорий нет');
+let catPick=null;
+const catRows=()=>catDraft.length?catDraft.map(c=>`<div class="sub catrow" data-cid="${c.id}"><button type="button" class="emo cico" style="background:color-mix(in srgb,${c.color} 22%,transparent)" data-act="cmicon">${esc(c.icon||'📌')}</button><button type="button" class="sw" style="background:${c.color};width:24px;height:24px;flex:none" data-act="cmcolor"></button><input type="text" value="${esc(c.name)}" placeholder="Название"><button type="button" class="x" data-act="cmdel">×</button></div>${catPick===c.id?`<div class="chips iconpick">${EMOJI.map(e=>`<button type="button" class="emo ${c.icon===e?'on':''}" data-act="cmseticon" data-e="${e}">${e}</button>`).join('')}</div>`:''}`).join(''):empty('Категорий нет');
 function readCatInputs(){document.querySelectorAll('#catlist .sub').forEach(el=>{const c=catDraft.find(x=>x.id===el.dataset.cid);if(c)c.name=el.querySelector('input').value;});}
 function saveCats(){
   readCatInputs();
   const list=catDraft.map(c=>({...c,name:c.name.trim()})).filter(c=>c.name);
   const ids=new Set(list.map(c=>c.id));
   for(const it of S.items)if(it.cat&&!ids.has(it.cat))delete it.cat;
-  S.cats=list;save();closeSheet();render();toast('Категории сохранены');
+  S.cats=list;
+  for(const it of S.items){const c=catOf(it);if(c){it.color=c.color;it.icon=c.icon||'';}}
+  save();closeSheet();render();toast('Категории сохранены');
 }
 
 /* ============ уведомления ============ */
@@ -1207,10 +1266,11 @@ function buildAlarms(){
     }
     if(s.nBday)for(const p of S.people)if(bdayOn(p,k)){const t=atMs(k,s.morning),a=ageOn(p,k);
       if(t>now)out.push({id:hid('b'+p.id+k),at:t,ch:'day',title:'🎂 День рождения',text:p.name+(a!=null?` — исполняется ${a} ${plural(a,['год','года','лет'])}`:'')});}
-    for(const it of S.items){if(!shopList(it).length||!occursOn(it,k)||isDone(it,k))continue;
-      const left=shopLeft(it,k);if(!left.length)continue;
-      const t=atMs(addDays(k,-SHOP_DAYS),s.morning);
-      if(t>now)out.push({id:hid('s'+it.id+k),at:t,ch:'day',title:`🛒 Через неделю: ${it.title}`,text:'Нужно купить: '+left.map(x=>x.t).join(', ')});}
+    for(const it of S.items){if(!hasShop(it)||it.shopRemind===false||!occursOn(it,k)||isDone(it,k))continue;
+      const left=shopLeft(it,k);if(shopList(it).length&&!left.length)continue;
+      const t=atMs(addDays(k,-SHOP_DAYS),s.morning),sv=shopSum(it);
+      const txt=[left.length?'Нужно купить: '+left.map(x=>x.t).join(', '):'',sv?'Сумма: '+money(sv):''].filter(Boolean).join(' · ')||'Запланирована покупка';
+      if(t>now)out.push({id:hid('s'+it.id+k),at:t,ch:'day',title:`🛒 Через неделю: ${it.title}`,text:txt});}
     if(s.agenda){const its=itemsOn(k).filter(it=>!(isCheck(it)&&isDone(it,k)));const t=atMs(k,s.agendaTime);
       if(its.length&&t>now)out.push({id:hid('a'+k),at:t,ch:'day',title:`План на сегодня: ${its.length} ${plural(its.length,['пункт','пункта','пунктов'])}`,text:its.slice(0,6).map(it=>(it.time?it.time+' ':'')+it.title).join(' · ')});}
   }
@@ -1266,16 +1326,16 @@ document.addEventListener('click',e=>{
     case 'calmode':cal.mode=d.m;cal.cur=cal.sel;render();break;
     case 'tf':tf=d.f;render();break;
     case 'tcat':tcat=d.id;render();break;
-    case 'cat':edit.cat=d.id||null;el.parentNode.querySelectorAll('.chip').forEach(b=>b.classList.toggle('on',b===el));
-      {const c=catOf(edit);if(c){edit.color=c.color;document.querySelectorAll('#ef .sw').forEach(b=>b.classList.toggle('on',b.dataset.c===c.color));}}break;
+    case 'cat':edit.cat=d.id||null;el.parentNode.querySelectorAll('.chip').forEach(b=>b.classList.toggle('on',b===el));break;
     case 'newcat':$('#newcat').classList.toggle('hide');if(!$('#newcat').classList.contains('hide'))$('#nc-name').focus();break;
-    case 'addcat':{const c=addCategory($('#nc-name').value);if(!c)break;edit.cat=c.id;edit.color=c.color;$('#catchips').innerHTML=catChips(c.id);
-      document.querySelectorAll('#ef .sw').forEach(b=>b.classList.toggle('on',b.dataset.c===c.color));$('#nc-name').value='';$('#newcat').classList.add('hide');break;}
+    case 'addcat':{const c=addCategory($('#nc-name').value);if(!c)break;edit.cat=c.id;$('#catchips').innerHTML=catChips(c.id);$('#nc-name').value='';$('#newcat').classList.add('hide');break;}
     case 'cats':openCats();break;
-    case 'cmcolor':{readCatInputs();const c=catDraft.find(x=>x.id===el.closest('.sub').dataset.cid);c.color=COLORS[(COLORS.indexOf(c.color)+1)%COLORS.length];el.style.background=c.color;break;}
+    case 'cmcolor':{readCatInputs();const c=catDraft.find(x=>x.id===el.closest('.sub').dataset.cid);c.color=COLORS[(COLORS.indexOf(c.color)+1)%COLORS.length];$('#catlist').innerHTML=catRows();break;}
+    case 'cmicon':{readCatInputs();const id=el.closest('.sub').dataset.cid;catPick=catPick===id?null:id;$('#catlist').innerHTML=catRows();break;}
+    case 'cmseticon':{readCatInputs();const c=catDraft.find(x=>x.id===catPick);if(c)c.icon=d.e;catPick=null;$('#catlist').innerHTML=catRows();break;}
     case 'cmdel':{readCatInputs();catDraft=catDraft.filter(x=>x.id!==el.closest('.sub').dataset.cid);$('#catlist').innerHTML=catRows();break;}
     case 'cmadd':{readCatInputs();const n=$('#cm-name').value.trim();if(!n){toast('Введите название');break;}
-      const used=catDraft.map(c=>c.color);catDraft.push({id:uid(),name:n,color:COLORS.find(c=>!used.includes(c))||COLORS[catDraft.length%COLORS.length]});
+      const used=catDraft.map(c=>c.color);const nc={id:uid(),name:n,icon:'📌',color:COLORS.find(c=>!used.includes(c))||COLORS[catDraft.length%COLORS.length]};catDraft.push(nc);catPick=nc.id;
       $('#catlist').innerHTML=catRows();$('#cm-name').value='';break;}
     case 'cmsave':saveCats();break;
     case 'pf':pf=d.f;render();break;
@@ -1299,6 +1359,7 @@ document.addEventListener('click',e=>{
     case 'subchk':el.classList.toggle('on');break;
     case 'addshop':{const w=document.createElement('div');w.innerHTML=shopRow({id:uid(),t:''},false);const n=w.firstChild;$('#shops').appendChild(n);n.querySelector('input').focus();break;}
     case 'shop':openShop(d.id,d.k);break;
+    case 'spend':openSpend();break;
     case 'buy':{e.stopPropagation();if(!shopCtx)break;const it=S.items.find(i=>i.id===shopCtx.id);if(!it)break;
       setBought(it,d.sid,shopCtx.k,!shopBought(it,d.sid,shopCtx.k));save();$('#shoplist').innerHTML=shopCtx.rows();render();
       if(!shopLeft(it,shopCtx.k).length)toast('Всё куплено 🎉');break;}
