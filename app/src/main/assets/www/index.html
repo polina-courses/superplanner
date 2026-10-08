@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-08b">
+<meta name="blizko-ui" content="2026-10-08c">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -161,6 +161,16 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.ncf{padding:4px 0 10px}
+.ncf-top{display:flex;gap:8px;align-items:center;padding:6px 0}
+.ncf-top input{flex:1;min-width:0;background:var(--card2)!important;border-radius:10px!important;padding:9px 10px!important}
+.ig-h{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:8px 2px 4px}
+.crow{gap:8px;padding:2px 0 4px}
+.crow .sw{width:28px;height:28px}
+.iconlib{max-height:250px;overflow:auto;border-top:1px solid var(--line);margin-top:6px;padding-right:2px}
+.ig{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:4px}
+.ig .emo{width:auto;height:38px;font-size:20px}
+.iconpick{padding:4px 0 6px;border-top:1px solid var(--line)}
 .spend{width:100%;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:0 0 10px;box-shadow:var(--shadow);text-align:left}
 .sp-l{flex:1;font-size:14px;display:flex;flex-direction:column}
 .sp-l i{font-style:normal;font-size:12px;color:var(--muted)}
@@ -377,15 +387,43 @@ function repLabel(r){
 const KEY='blizko.v1';
 const COLORS=['#C2552D','#D9922E','#C9A227','#7A9A3A','#2E8B7A','#3A6EA5','#6B5CA5','#B5487A','#7A7065'];
 const NOCAT='#9A8F84';
-const EMOJI=['🏠','👧','🐾','💰','💊','💼','⭐','❤️','🛒','🧹','🚗','✈️','🎉','🎁','📚','🧘','🏃','🍽️','💄','🧵','💡','📞','🌿','📌'];
+const ICONS=[
+ ['Дом',['🏠','🏡','🛋️','🛏️','🧹','🧺','🧽','🪴','🔑','🛠️','💡','🚿']],
+ ['Семья и дети',['👧','👦','👶','🧸','🎒','🏫','✏️','🎨','❤️','👨‍👩‍👧','🤱','🍼']],
+ ['Животные',['🐾','🐱','🐶','🐈','🐕','🦴','🐟','🐦','🐹','🐰','✂️','🥣']],
+ ['Финансы',['💰','💳','🪙','💵','🏦','🧾','📊','📈','🐷','💸','🏷️','🔐']],
+ ['Здоровье',['🩺','💊','🦷','🏥','💉','🩹','🧠','👁️','❤️‍🩹','🌡️','🧘','😴']],
+ ['Красота',['💅','💄','💇‍♀️','🪞','🧴','👗','👠','💍','🌸','✨','🛁','🧖‍♀️']],
+ ['Работа и учёба',['💼','💻','📋','📅','📞','📧','📚','📖','🎓','📝','🧪','🗂️']],
+ ['Еда и покупки',['🛒','🛍️','🍳','🥗','🍎','🥖','☕','🍰','🍽️','🥕','🧁','📦']],
+ ['Спорт и отдых',['🏃','🏋️','🚴','🏊','⚽','🎾','🧗','⛺','🎣','🎮','🎬','🎵']],
+ ['Хобби',['📿','🧵','🪡','🧶','🖌️','📷','🎸','🎹','🌿','🌻','🧩','✂️']],
+ ['Поездки',['🚗','🚕','🚌','🚆','✈️','🧳','🗺️','🏖️','⛽','🅿️','🚲','🏔️']],
+ ['Праздники и люди',['🎉','🎁','🎂','🎈','🥳','🤝','👭','💐','🕯️','⭐','📌','🔔']],
+];
+const ALLICONS=[...new Set(ICONS.flatMap(g=>g[1]))];
+const GUESS=[
+ [/дом|кварт|быт|хозяй/,'🏠'],[/тайк|таис|доч|реб[её]н|дет|сын|малыш/,'👧'],[/школ|сад\b|садик|урок/,'🎒'],
+ [/живот|кот|кош|собак|п[её]с|питом|корм|ветер/,'🐾'],[/финанс|деньг|бюджет|оплат|банк|налог|сч[её]т|кредит|долг|зарплат/,'💰'],
+ [/здоров|врач|медиц|больн|лекар|аптек|анализ|поликл/,'🩺'],[/зуб|стомат/,'🦷'],[/красот|маник|педик|космет|салон|ногт/,'💅'],[/стрижк|парикм|волос/,'💇‍♀️'],
+ [/работ|офис|проект|клиент|qa|тест/,'💼'],[/уч[её]б|курс|обучен|лекци|экзам/,'🎓'],[/книг|чтен|читат/,'📖'],
+ [/спорт|трен|фитнес|зал|бег|йог/,'🏋️'],[/бисер|украш|бусин/,'📿'],[/рукод|шить|вязан|вышив/,'🧵'],[/рисов|творч|хобби/,'🎨'],
+ [/машин|авто|гараж|шин/,'🚗'],[/покуп|магаз|продукт|шопинг/,'🛒'],[/путеш|отпуск|поездк|отдых/,'✈️'],[/уборк|чист|стирк/,'🧹'],
+ [/дач|огород|растен|цвет/,'🌿'],[/еда|готов|кухн|рецеп|меню/,'🍳'],[/праздн|подар|день рожд/,'🎁'],[/семь|родн|муж|мама|папа/,'❤️'],
+ [/друз|встреч/,'🤝'],[/ремонт|мастер/,'🛠️'],[/документ|бумаг|госуслуг/,'🧾'],[/музык/,'🎵'],[/личн|себ|я$/,'⭐']
+];
+const guessIcon=name=>{const n=(name||'').toLowerCase();for(const [r,e] of GUESS)if(r.test(n))return e;return '';};
+const iconGrid=(sel,act)=>`<div class="iconlib">${ICONS.map(([g,list])=>`<div class="ig-h">${g}</div><div class="ig">${list.map(e=>`<button type="button" class="emo ${sel===e?'on':''}" data-act="${act}" data-e="${e}">${e}</button>`).join('')}</div>`).join('')}</div>`;
+const colorRow=(sel,act)=>`<div class="chips crow">${COLORS.map(c=>`<button type="button" class="sw ${sel===c?'on':''}" style="background:${c}" data-act="${act}" data-c="${c}"></button>`).join('')}</div>`;
+const freeColor=list=>{const used=list.map(c=>c.color);return COLORS.find(c=>!used.includes(c))||COLORS[list.length%COLORS.length];};
 const PRIO=['Нет','Низко','Средне','Обязательно'];
 const REMS=[['','Без напоминания'],['0','В момент начала'],['5','За 5 минут'],['15','За 15 минут'],['30','За 30 минут'],['60','За 1 час'],['120','За 2 часа'],['1440','За 1 день'],['2880','За 2 дня'],['10080','За неделю']];
 const catOf=it=>it&&it.cat?S.cats.find(c=>c.id===it.cat):null;
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const hid=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h&0x7fffffff)||1;};
 
-const DEFCATS=()=>[{id:'home',name:'Дом',color:'#D9922E',icon:'🏠'},{id:'taika',name:'Тайка',color:'#B5487A',icon:'👧'},{id:'pets',name:'Животные',color:'#7A9A3A',icon:'🐾'},{id:'money',name:'Финансы',color:'#C9A227',icon:'💰'},{id:'health',name:'Здоровье',color:'#2E8B7A',icon:'💊'}];
-const KNOWNCAT={'дом':['#D9922E','🏠'],'тайка':['#B5487A','👧'],'животные':['#7A9A3A','🐾'],'финансы':['#C9A227','💰'],'здоровье':['#2E8B7A','💊'],'работа':['#3A6EA5','💼'],'личное':['#6B5CA5','⭐'],'семья':['#C2552D','❤️']};
+const DEFCATS=()=>[{id:'home',name:'Дом',color:'#D9922E',icon:'🏠'},{id:'taika',name:'Тайка',color:'#B5487A',icon:'👧'},{id:'pets',name:'Животные',color:'#7A9A3A',icon:'🐾'},{id:'money',name:'Финансы',color:'#C9A227',icon:'💰'},{id:'health',name:'Здоровье',color:'#2E8B7A',icon:'🩺'}];
+const KNOWNCAT={'дом':['#D9922E','🏠'],'тайка':['#B5487A','👧'],'животные':['#7A9A3A','🐾'],'финансы':['#C9A227','💰'],'здоровье':['#2E8B7A','🩺'],'работа':['#3A6EA5','💼'],'личное':['#6B5CA5','⭐'],'семья':['#C2552D','❤️']};
 /* однократно: обязательные категории + иконки, вид записей берётся из категории */
 function migrateCats(d){
   if(d.settings.catsV2)return;
@@ -414,6 +452,7 @@ function normalize(d){
   d.settings=Object.assign(b.settings,d.settings||{});
   d.cats=Array.isArray(d.cats)?d.cats:DEFCATS();
   migrateCats(d);
+  if(!d.settings.catsV3){for(const c of d.cats){const g=guessIcon(c.name);if(g)c.icon=g;}for(const it of d.items){const c=d.cats.find(x=>x.id===it.cat);if(c)it.icon=c.icon;}d.settings.catsV3=true;}
   d.v=1;return d;
 }
 function save(){
@@ -911,7 +950,7 @@ function openItem(id,preset={},ctxK=''){
   <div class="fld">
     <div class="fl"><label>Категория</label><button type="button" class="btn sm ghost" data-act="newcat">+ новая</button></div>
     <div class="chips" id="catchips" style="padding-top:0">${catChips(edit.cat)}</div>
-    <div class="newcat hide" id="newcat"><input type="text" id="nc-name" placeholder="Название категории" autocomplete="off"><button type="button" class="btn sm pri" data-act="addcat">Добавить</button></div>
+    <div class="hide" id="newcat"></div>
   </div>
   ${src&&(src.type==='task'||src.type==='event')&&src.date&&!isDone(src,k)?`<div class="fld"><div class="fl"><label>Перенести${isRep(src)?'<div class="hint">только '+relDay(k)+', серия не изменится</div>':''}</label></div>
     <div class="chips" style="padding-top:0">${[[today(),'На сегодня'],[addDays(today(),1),'На завтра'],[addDays(k<today()?today():k,7),'+ неделя']].filter(([d])=>d!==k).map(([d,l])=>`<button type="button" class="chip" data-act="moveto" data-to="${d}">${l}</button>`).join('')}<label class="chip" style="position:relative;overflow:hidden">Дата…<input type="date" id="f-moveto" style="position:absolute;inset:0;opacity:0"></label></div></div>`:''}
@@ -995,11 +1034,23 @@ function syncTypeUI(){
   syncRepUI();
 }
 const catChips=sel=>S.cats.map(c=>`<button type="button" class="chip cchip ${sel===c.id?'on':''}" style="--cc:${c.color}" data-act="cat" data-id="${c.id}"><span class="ci">${esc(c.icon||'📌')}</span>${esc(c.name)}</button>`).join('')+`<button type="button" class="chip cchip ${!sel?'on':''}" style="--cc:${NOCAT}" data-act="cat" data-id="">Без категории</button>`;
-function addCategory(name){
+function addCategory(name,icon,color){
   name=name.trim();if(!name){toast('Введите название');return null;}
   const ex=S.cats.find(c=>c.name.toLowerCase()===name.toLowerCase());if(ex)return ex;
-  const used=S.cats.map(c=>c.color),color=COLORS.find(c=>!used.includes(c))||COLORS[S.cats.length%COLORS.length];
-  const c={id:uid(),name,color,icon:'📌'};S.cats.push(c);save();return c;
+  const c={id:uid(),name,color:color||freeColor(S.cats),icon:icon||guessIcon(name)||'📌'};S.cats.push(c);save();return c;
+}
+/* форма новой категории: p — 'nc' (в редакторе) или 'cm' (в настройках) */
+const NF={};
+function newCatForm(p,list){
+  NF[p]={icon:'📌',color:freeColor(list),picked:false};
+  return `<div class="ncf"><div class="ncf-top"><span class="emo cico" id="${p}-prev" style="background:color-mix(in srgb,${NF[p].color} 22%,transparent)">📌</span><input type="text" id="${p}-name" placeholder="Название категории" autocomplete="off" data-ncf="${p}"><button type="button" class="btn sm pri" data-act="${p==='nc'?'addcat':'cmadd'}">Добавить</button></div>
+  <div class="ig-h">Цвет</div><div id="${p}-colors">${colorRow(NF[p].color,'nfcolor" data-p="'+p)}</div>
+  <div id="${p}-icons">${iconGrid(NF[p].icon,'nficon" data-p="'+p)}</div></div>`;
+}
+function nfRefresh(p){
+  const f=NF[p];$('#'+p+'-prev').textContent=f.icon;$('#'+p+'-prev').style.background=`color-mix(in srgb,${f.color} 22%,transparent)`;
+  document.querySelectorAll(`#${p}-colors .sw`).forEach(b=>b.classList.toggle('on',b.dataset.c===f.color));
+  document.querySelectorAll(`#${p}-icons .emo`).forEach(b=>b.classList.toggle('on',b.dataset.e===f.icon));
 }
 const shopRow=(x,b)=>`<div class="sub shop" data-sid="${x.id}"><button type="button" class="chk ${b?'on':''}" data-act="subchk"></button><input type="text" value="${esc(x.t)}" placeholder="Что купить"><button type="button" class="x" data-act="delsub">×</button></div>`;
 const subRow=(s,done)=>`<div class="sub" data-sid="${s.id}"><button type="button" class="chk ${done?'on':''}" data-act="subchk"></button><input type="text" value="${esc(s.t)}" placeholder="Подпункт"><input type="date" class="sdate" value="${esc(s.date||'')}" title="Когда сделать"><button type="button" class="x" data-act="delsub">×</button></div>`;
@@ -1228,12 +1279,12 @@ function importText(){
 let catDraft=null;
 function openCats(){
   catDraft=JSON.parse(JSON.stringify(S.cats));catPick=null;
-  openSheet(`<div class="shead"><h3>Категории</h3></div><p class="muted small" style="margin:0 4px 8px">Значок и цвет категории получают все её дела. Нажмите на значок, чтобы сменить его, на кружок — чтобы сменить цвет.</p><div class="fld" id="catlist">${catRows()}</div>
-  <div class="newcat" style="padding:0 0 4px"><input type="text" id="cm-name" placeholder="Новая категория" autocomplete="off"><button type="button" class="btn sm" data-act="cmadd">Добавить</button></div>
+  openSheet(`<div class="shead"><h3>Категории</h3></div><p class="muted small" style="margin:0 4px 8px">Значок и цвет категории получают все её дела. Нажмите на значок, чтобы сменить значок или цвет.</p><div class="fld" id="catlist">${catRows()}</div>
+  <div class="fld"><div class="fl"><label>Новая категория</label></div>${newCatForm('cm',catDraft)}</div>
   <div class="actions"><button type="button" class="btn ghost" data-act="close">Отмена</button><button type="button" class="btn pri" data-act="cmsave">Сохранить</button></div>`);
 }
 let catPick=null;
-const catRows=()=>catDraft.length?catDraft.map(c=>`<div class="sub catrow" data-cid="${c.id}"><button type="button" class="emo cico" style="background:color-mix(in srgb,${c.color} 22%,transparent)" data-act="cmicon">${esc(c.icon||'📌')}</button><button type="button" class="sw" style="background:${c.color};width:24px;height:24px;flex:none" data-act="cmcolor"></button><input type="text" value="${esc(c.name)}" placeholder="Название"><button type="button" class="x" data-act="cmdel">×</button></div>${catPick===c.id?`<div class="chips iconpick">${EMOJI.map(e=>`<button type="button" class="emo ${c.icon===e?'on':''}" data-act="cmseticon" data-e="${e}">${e}</button>`).join('')}</div>`:''}`).join(''):empty('Категорий нет');
+const catRows=()=>catDraft.length?catDraft.map(c=>`<div class="sub catrow" data-cid="${c.id}"><button type="button" class="emo cico" style="background:color-mix(in srgb,${c.color} 22%,transparent)" data-act="cmicon">${esc(c.icon||'📌')}</button><button type="button" class="sw" style="background:${c.color};width:24px;height:24px;flex:none" data-act="cmcolor"></button><input type="text" value="${esc(c.name)}" placeholder="Название"><button type="button" class="x" data-act="cmdel">×</button></div>${catPick===c.id?`<div class="iconpick"><div class="ig-h">Цвет</div>${colorRow(c.color,'cmsetcolor')}${iconGrid(c.icon,'cmseticon')}<div style="padding:4px 0 8px"><button type="button" class="btn sm" data-act="cmicon">Готово</button></div></div>`:''}`).join(''):empty('Категорий нет');
 function readCatInputs(){document.querySelectorAll('#catlist .sub').forEach(el=>{const c=catDraft.find(x=>x.id===el.dataset.cid);if(c)c.name=el.querySelector('input').value;});}
 function saveCats(){
   readCatInputs();
@@ -1327,16 +1378,20 @@ document.addEventListener('click',e=>{
     case 'tf':tf=d.f;render();break;
     case 'tcat':tcat=d.id;render();break;
     case 'cat':edit.cat=d.id||null;el.parentNode.querySelectorAll('.chip').forEach(b=>b.classList.toggle('on',b===el));break;
-    case 'newcat':$('#newcat').classList.toggle('hide');if(!$('#newcat').classList.contains('hide'))$('#nc-name').focus();break;
-    case 'addcat':{const c=addCategory($('#nc-name').value);if(!c)break;edit.cat=c.id;$('#catchips').innerHTML=catChips(c.id);$('#nc-name').value='';$('#newcat').classList.add('hide');break;}
+    case 'newcat':{const b=$('#newcat');if(b.classList.contains('hide')){b.innerHTML=newCatForm('nc',S.cats);b.classList.remove('hide');$('#nc-name').focus();}else{b.classList.add('hide');b.innerHTML='';}break;}
+    case 'addcat':{const f=NF.nc;const c=addCategory($('#nc-name').value,f.icon,f.color);if(!c)break;edit.cat=c.id;$('#catchips').innerHTML=catChips(c.id);$('#newcat').classList.add('hide');$('#newcat').innerHTML='';break;}
     case 'cats':openCats();break;
-    case 'cmcolor':{readCatInputs();const c=catDraft.find(x=>x.id===el.closest('.sub').dataset.cid);c.color=COLORS[(COLORS.indexOf(c.color)+1)%COLORS.length];$('#catlist').innerHTML=catRows();break;}
-    case 'cmicon':{readCatInputs();const id=el.closest('.sub').dataset.cid;catPick=catPick===id?null:id;$('#catlist').innerHTML=catRows();break;}
-    case 'cmseticon':{readCatInputs();const c=catDraft.find(x=>x.id===catPick);if(c)c.icon=d.e;catPick=null;$('#catlist').innerHTML=catRows();break;}
+    case 'cmcolor':{readCatInputs();const id=el.closest('.sub').dataset.cid;catPick=catPick===id?null:id;$('#catlist').innerHTML=catRows();break;}
+    case 'nficon':{const f=NF[d.p];f.icon=d.e;f.picked=true;nfRefresh(d.p);break;}
+    case 'nfcolor':{NF[d.p].color=d.c;nfRefresh(d.p);break;}
+    case 'cmicon':{readCatInputs();const r=el.closest('.sub'),id=r&&r.dataset.cid;catPick=!id||catPick===id?null:id;$('#catlist').innerHTML=catRows();break;}
+    case 'cmseticon':{readCatInputs();const c=catDraft.find(x=>x.id===catPick);if(c)c.icon=d.e;$('#catlist').innerHTML=catRows();break;}
+    case 'cmsetcolor':{readCatInputs();const c=catDraft.find(x=>x.id===catPick);if(c)c.color=d.c;$('#catlist').innerHTML=catRows();break;}
     case 'cmdel':{readCatInputs();catDraft=catDraft.filter(x=>x.id!==el.closest('.sub').dataset.cid);$('#catlist').innerHTML=catRows();break;}
     case 'cmadd':{readCatInputs();const n=$('#cm-name').value.trim();if(!n){toast('Введите название');break;}
-      const used=catDraft.map(c=>c.color);const nc={id:uid(),name:n,icon:'📌',color:COLORS.find(c=>!used.includes(c))||COLORS[catDraft.length%COLORS.length]};catDraft.push(nc);catPick=nc.id;
-      $('#catlist').innerHTML=catRows();$('#cm-name').value='';break;}
+      if(catDraft.some(c=>c.name.trim().toLowerCase()===n.toLowerCase())){toast('Такая категория уже есть');break;}
+      const f=NF.cm;catDraft.push({id:uid(),name:n,icon:f.icon,color:f.color});$('#catlist').innerHTML=catRows();
+      $('#cm-name').closest('.fld').outerHTML=`<div class="fld"><div class="fl"><label>Новая категория</label></div>${newCatForm('cm',catDraft)}</div>`;toast('Добавлено — не забудьте «Сохранить»');break;}
     case 'cmsave':saveCats();break;
     case 'pf':pf=d.f;render();break;
     case 'cdb':S.settings.cdBdays=d.v==='1';save();render();break;
@@ -1382,6 +1437,7 @@ document.addEventListener('click',e=>{
     case 'wipe':ask('Стереть все данные?','Это нельзя отменить. Сначала сделайте резервную копию.',[{label:'Стереть всё',value:'y',cls:'danger'}]).then(v=>{if(!v)return;S=blank();applyTheme();save();render();toast('Данные удалены');});break;
   }
 });
+document.addEventListener('input',e=>{const p=e.target.dataset&&e.target.dataset.ncf;if(!p||!NF[p]||NF[p].picked)return;NF[p].icon=guessIcon(e.target.value)||'📌';nfRefresh(p);});
 document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
   if(e.target.id==='f-title'){e.preventDefault();e.target.blur();}
   if(e.target.id==='nc-name'){e.preventDefault();$('[data-act="addcat"]').click();}
