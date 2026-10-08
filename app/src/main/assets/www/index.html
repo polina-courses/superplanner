@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-08e">
+<meta name="blizko-ui" content="2026-10-08f">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -1458,7 +1458,7 @@ document.addEventListener('click',e=>{
     case 'savesettings':saveSettings();break;
     case 'checkupd':toast('Проверяю…');Native.checkUpdate();break;
     case 'openapk':Native.openApk();break;
-    case 'applyupd':$('#updbar').classList.add('hide');try{Native.reload();}catch(e){location.reload();}break;
+    case 'applyupd':$('#updbar').classList.add('hide');applyUpdate();break;
     case 'testnotif':if(window.Native&&Native.test){Native.test();toast('Уведомление придёт через 5 секунд');}else toast('Уведомления работают только в приложении на телефоне');break;
     case 'export':doExport();break;
     case 'importfile':$('#s-file').click();break;
@@ -1478,14 +1478,24 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
 window.__back=()=>{if(sheetOpen){closeSheet();return true;}if(tab!=='today'){tab='today';render();return true;}return false;};
 /* возврат в приложение: обновить «сегодня» и перепланировать */
 let lastDay=today();
-window.__resume=()=>{if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today();}if(carryOver())save();if(!sheetOpen)render();scheduleNow();};
+window.__resume=()=>{if(staleUi()&&!sheetOpen){applyUpdate();return;}if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today();}if(carryOver())save();if(!sheetOpen)render();scheduleNow();};
 setInterval(()=>{if(today()!==lastDay)window.__resume();},60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.__resume();});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);
 
 /* обновления интерфейса */
-window.__updateReady=()=>{$('#updbar').classList.remove('hide');};
-window.__updateResult=r=>{if(r===1){closeSheet();window.__updateReady();}else if(r===0)toast('У вас последняя версия');else toast('Не удалось проверить — нет интернета?');};
+/* скачанная версия новее той, что сейчас на экране? */
+const PAGE_T=Date.now();
+function staleUi(){try{return !!(window.Native&&Native.uiUpdatedAt&&(+Native.uiUpdatedAt())>PAGE_T);}catch(e){return false;}}
+function applyUpdate(){try{localStorage.setItem('blizko.updated','1');}catch(e){}try{Native.reload();}catch(e){location.reload();}}
+/* фоновая проверка нашла обновление: применяем сразу, если ничего не открыто, иначе — плашка */
+window.__updateReady=()=>{if(!sheetOpen)applyUpdate();else $('#updbar').classList.remove('hide');};
+window.__updateResult=r=>{
+  if(r===1||(r===0&&staleUi())){sheetOnClose=null;closeSheet();applyUpdate();}
+  else if(r===0)toast('У вас последняя версия · '+UIVER);
+  else toast('Не удалось проверить — нет интернета?');
+};
+try{if(localStorage.getItem('blizko.updated')){localStorage.removeItem('blizko.updated');setTimeout(()=>toast('Приложение обновлено · версия '+UIVER),400);}}catch(e){}
 
 if(carryOver())save();
 applyTheme();render();scheduleNow();
