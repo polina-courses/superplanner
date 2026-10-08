@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-08d">
+<meta name="blizko-ui" content="2026-10-08e">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -524,20 +524,27 @@ function shopDue(from){
   return out.sort((a,b)=>a.k.localeCompare(b.k));
 }
 
-/* траты на ближайшие 7 дней (включая сегодня), без выполненных */
-function weekSpend(){
-  const t=today(),rows=[];let total=0;
-  for(let i=0;i<7;i++){const k=addDays(t,i);
-    for(const it of S.items){const v=shopSum(it);if(!v||!occursOn(it,k)||isDone(it,k))continue;total+=v;rows.push({it,k,v});}}
-  return {total,rows};
+/* траты только за текущую календарную неделю (пн–вс); выполненные не считаются */
+function weekSpend(k=today()){
+  const start=addDays(k,-dow(k)),rows=[];let total=0;
+  for(let i=0;i<7;i++){const d=addDays(start,i);
+    for(const it of S.items){const v=shopSum(it);if(!v||!occursOn(it,d)||isDone(it,d))continue;total+=v;rows.push({it,k:d,v});}}
+  return {total,rows,start};
+}
+function weekName(start){
+  const t0=addDays(today(),-dow(today())),n=Math.round(diffDays(t0,start)/7);
+  const a=pdate(start),b=pdate(addDays(start,6));
+  const range=a.getMonth()===b.getMonth()?`${a.getDate()}–${b.getDate()} ${MG[b.getMonth()]}`:`${a.getDate()} ${MG[a.getMonth()].slice(0,3)} – ${b.getDate()} ${MG[b.getMonth()].slice(0,3)}`;
+  return {title:n===0?'Траты на эту неделю':n===1?'Траты на следующую неделю':n===-1?'Траты на прошлой неделе':'Траты за неделю',range};
 }
 function spendBox(){
-  const w=weekSpend();if(!w.total)return '';
-  return `<button class="spend" data-act="spend"><span class="sp-l">💳 Траты на 7 дней<i>${w.rows.length} ${plural(w.rows.length,['покупка','покупки','покупок'])}</i></span><b>${money(w.total)}</b><span class="sp-a">›</span></button>`;
+  const w=weekSpend(today());if(!w.total)return '';
+  const nm=weekName(w.start);
+  return `<button class="spend" data-act="spend"><span class="sp-l">💳 ${nm.title}<i>${nm.range} · ${w.rows.length} ${plural(w.rows.length,['трата','траты','трат'])}</i></span><b>${money(w.total)}</b><span class="sp-a">›</span></button>`;
 }
 function openSpend(){
-  const w=weekSpend();
-  openSheet(`<div class="shead"><h3>💳 Траты на 7 дней</h3></div><div class="card">${w.rows.map(({it,k,v})=>`<div class="row" data-act="edit" data-id="${it.id}" data-k="${k}">${it.icon?`<span class="ico">${esc(it.icon)}</span>`:''}<div class="txt"><div class="t">${esc(it.title)}</div><div class="m"><span>${relDay(k)}${it.time?' в '+esc(it.time):''}</span></div></div><b class="sp-v">${money(v)}</b></div>`).join('')}
+  const w=weekSpend(today()),nm=weekName(w.start);
+  openSheet(`<div class="shead"><h3>💳 ${nm.title}</h3></div><p class="muted" style="margin:0 4px 10px">${nm.range}</p><div class="card">${w.rows.map(({it,k,v})=>`<div class="row" data-act="edit" data-id="${it.id}" data-k="${k}">${it.icon?`<span class="ico">${esc(it.icon)}</span>`:''}<div class="txt"><div class="t">${esc(it.title)}</div><div class="m"><span>${relDay(k)}${it.time?' в '+esc(it.time):''}</span></div></div><b class="sp-v">${money(v)}</b></div>`).join('')}
   <div class="row sp-tot"><div class="txt"><div class="t"><b>Итого</b></div></div><b class="sp-v">${money(w.total)}</b></div></div>
   <div class="actions"><button type="button" class="btn pri" data-act="close">Готово</button></div>`);
 }
@@ -998,7 +1005,7 @@ function openItem(id,preset={},ctxK=''){
   <div class="fld" data-only="task event">
     <div class="fl"><label>Нужны покупки<div class="hint">сумма, напоминание, список</div></label><span class="toggle"><input type="checkbox" id="f-needshop" ${edit.needShop?'checked':''}><span></span></span></div>
     <div id="shopbox" class="${edit.needShop?'':'hide'}">
-      <div class="fl"><label>Сумма<div class="hint">попадёт в «Траты на 7 дней» в календаре</div></label><input type="number" class="small" style="width:110px" id="f-shopsum" min="0" step="any" inputmode="decimal" value="${+edit.shopSum>0?esc(edit.shopSum):''}" placeholder="₽"></div>
+      <div class="fl"><label>Сумма<div class="hint">попадёт в «Траты на неделю» в календаре</div></label><input type="number" class="small" style="width:110px" id="f-shopsum" min="0" step="any" inputmode="decimal" value="${+edit.shopSum>0?esc(edit.shopSum):''}" placeholder="₽"></div>
       <div class="fl"><label>Напомнить за неделю<div class="hint">подсказка на главном и уведомление</div></label><span class="toggle"><input type="checkbox" id="f-shoprem" ${edit.shopRemind===false?'':'checked'}><span></span></span></div>
       <div class="fl"><label>Что купить<div class="hint">можно не заполнять</div></label></div>
       <div id="shops">${(edit.shop||[]).map(x=>shopRow(x,shopBought(edit,x.id,k))).join('')}</div>
