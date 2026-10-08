@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-08c">
+<meta name="blizko-ui" content="2026-10-08d">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -161,6 +161,9 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.catedit{padding:8px 14px 6px;border-top:1px solid var(--line);background:var(--card2)}
+.catedit:first-child{border-top:0}
+.cdot{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px}
 .ncf{padding:4px 0 10px}
 .ncf-top{display:flex;gap:8px;align-items:center;padding:6px 0}
 .ncf-top input{flex:1;min-width:0;background:var(--card2)!important;border-radius:10px!important;padding:9px 10px!important}
@@ -422,6 +425,7 @@ const catOf=it=>it&&it.cat?S.cats.find(c=>c.id===it.cat):null;
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const hid=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h&0x7fffffff)||1;};
 
+const UIVER=(document.querySelector('meta[name="blizko-ui"]')||{}).content||'?';
 const DEFCATS=()=>[{id:'home',name:'Дом',color:'#D9922E',icon:'🏠'},{id:'taika',name:'Тайка',color:'#B5487A',icon:'👧'},{id:'pets',name:'Животные',color:'#7A9A3A',icon:'🐾'},{id:'money',name:'Финансы',color:'#C9A227',icon:'💰'},{id:'health',name:'Здоровье',color:'#2E8B7A',icon:'🩺'}];
 const KNOWNCAT={'дом':['#D9922E','🏠'],'тайка':['#B5487A','👧'],'животные':['#7A9A3A','🐾'],'финансы':['#C9A227','💰'],'здоровье':['#2E8B7A','🩺'],'работа':['#3A6EA5','💼'],'личное':['#6B5CA5','⭐'],'семья':['#C2552D','❤️']};
 /* однократно: обязательные категории + иконки, вид записей берётся из категории */
@@ -1231,7 +1235,7 @@ function openSettings(){
     <div class="fl"><label>Напоминание у новых событий</label><select id="s-defrem">${REMS.map(([v,l])=>`<option value="${v}" ${String(s.defRemind)===v?'selected':''}>${l}</option>`).join('')}</select></div>
   </div>
   <div class="fld">
-    <div class="fl"><label>Категории<div class="hint">${S.cats.map(c=>esc(c.name)).join(', ')||'нет'}</div></label><button type="button" class="btn sm" data-act="cats">Настроить</button></div>
+    <div class="fl"><label>Категории<div class="hint">добавить, изменить, удалить · ${S.cats.map(c=>esc((c.icon||'')+' '+c.name)).join(', ')||'нет'}</div></label><button type="button" class="btn sm" data-act="cats">Открыть</button></div>
   </div>
   <div class="fld">
     <div class="fl"><label>Утренняя сводка дня</label>${tg('s-agenda',s.agenda)}</div>
@@ -1241,7 +1245,7 @@ function openSettings(){
     <div class="fl"><label>Проверить уведомления</label><button type="button" class="btn sm" data-act="testnotif">Через 5 сек</button></div>
   </div>
   ${window.Native&&Native.checkUpdate?`<div class="fld">
-    <div class="fl"><label>Интерфейс<div class="hint">${(()=>{const t=+Native.uiUpdatedAt();return t?'обновлён '+relDay(dkey(new Date(t)))+' в '+new Date(t).toTimeString().slice(0,5):'встроенная версия';})()} · обновляется сам</div></label><button type="button" class="btn sm" data-act="checkupd">Проверить</button></div>
+    <div class="fl"><label>Интерфейс<div class="hint">версия ${esc(UIVER)} · ${(()=>{const t=+Native.uiUpdatedAt();return t?'обновлён '+relDay(dkey(new Date(t)))+' в '+new Date(t).toTimeString().slice(0,5):'встроенная версия';})()} · обновляется сам</div></label><button type="button" class="btn sm" data-act="checkupd">Проверить</button></div>
     <div class="fl"><label>Приложение ${esc(Native.appVersion())}<div class="hint">переустанавливать нужно, только если я скажу</div></label><button type="button" class="btn sm" data-act="openapk">Скачать APK</button></div>
   </div>`:''}
   <div class="fld">
@@ -1277,15 +1281,26 @@ function importText(){
 
 /* ----- категории ----- */
 let catDraft=null;
+let catOpen=null;
 function openCats(){
-  catDraft=JSON.parse(JSON.stringify(S.cats));catPick=null;
-  openSheet(`<div class="shead"><h3>Категории</h3></div><p class="muted small" style="margin:0 4px 8px">Значок и цвет категории получают все её дела. Нажмите на значок, чтобы сменить значок или цвет.</p><div class="fld" id="catlist">${catRows()}</div>
-  <div class="fld"><div class="fl"><label>Новая категория</label></div>${newCatForm('cm',catDraft)}</div>
-  <div class="actions"><button type="button" class="btn ghost" data-act="close">Отмена</button><button type="button" class="btn pri" data-act="cmsave">Сохранить</button></div>`);
+  catOpen=null;
+  openSheet(`<div class="shead"><h3>Категории</h3></div><p class="muted small" style="margin:0 4px 8px">Нажмите на категорию, чтобы изменить название, цвет и значок или удалить её. Все её дела сразу получат новый вид.</p>
+  <div class="card" id="catlist">${catRows()}</div>
+  <div class="fld" style="margin-top:12px"><div class="fl"><label>Новая категория</label></div><div id="cmform">${newCatForm('cm',S.cats)}</div></div>
+  <div class="actions"><button type="button" class="btn pri" data-act="close">Готово</button></div>`);
 }
-let catPick=null;
-const catRows=()=>catDraft.length?catDraft.map(c=>`<div class="sub catrow" data-cid="${c.id}"><button type="button" class="emo cico" style="background:color-mix(in srgb,${c.color} 22%,transparent)" data-act="cmicon">${esc(c.icon||'📌')}</button><button type="button" class="sw" style="background:${c.color};width:24px;height:24px;flex:none" data-act="cmcolor"></button><input type="text" value="${esc(c.name)}" placeholder="Название"><button type="button" class="x" data-act="cmdel">×</button></div>${catPick===c.id?`<div class="iconpick"><div class="ig-h">Цвет</div>${colorRow(c.color,'cmsetcolor')}${iconGrid(c.icon,'cmseticon')}<div style="padding:4px 0 8px"><button type="button" class="btn sm" data-act="cmicon">Готово</button></div></div>`:''}`).join(''):empty('Категорий нет');
-function readCatInputs(){document.querySelectorAll('#catlist .sub').forEach(el=>{const c=catDraft.find(x=>x.id===el.dataset.cid);if(c)c.name=el.querySelector('input').value;});}
+const catCount=id=>S.items.filter(i=>i.cat===id&&!i.goalId).length;
+function catRows(){
+  if(!S.cats.length)return empty('Категорий нет');
+  return S.cats.map(c=>catOpen===c.id
+    ?`<div class="catedit" data-cid="${c.id}"><div class="ncf-top"><span class="emo cico" style="background:color-mix(in srgb,${c.color} 22%,transparent)">${esc(c.icon||'📌')}</span><input type="text" id="ce-name" value="${esc(c.name)}" placeholder="Название"></div>
+      <div class="ig-h">Цвет</div>${colorRow(c.color,'cesetcolor')}${iconGrid(c.icon,'ceseticon')}
+      <div class="actions" style="margin:10px 0 4px"><button type="button" class="btn danger" data-act="cedel">Удалить</button><button type="button" class="btn pri" data-act="cedone">Готово</button></div></div>`
+    :`<div class="row" data-act="cmopen" data-cid="${c.id}"><span class="ava" style="background:color-mix(in srgb,${c.color} 25%,transparent);font-size:21px">${esc(c.icon||'📌')}</span><div class="txt"><div class="t">${esc(c.name)}</div><div class="m"><span><i class="cdot" style="background:${c.color}"></i>${catCount(c.id)} ${plural(catCount(c.id),['запись','записи','записей'])}</span></div></div><span class="muted" style="font-size:20px">›</span></div>`).join('');
+}
+function catApply(c){for(const it of S.items)if(it.cat===c.id){it.color=c.color;it.icon=c.icon||'';}}
+function catKeepName(){const c=S.cats.find(x=>x.id===catOpen),n=$('#ce-name');if(c&&n&&n.value.trim())c.name=n.value.trim();}
+function catsRefresh(){$('#catlist').innerHTML=catRows();render();}
 function saveCats(){
   readCatInputs();
   const list=catDraft.map(c=>({...c,name:c.name.trim()})).filter(c=>c.name);
@@ -1379,7 +1394,7 @@ document.addEventListener('click',e=>{
     case 'tcat':tcat=d.id;render();break;
     case 'cat':edit.cat=d.id||null;el.parentNode.querySelectorAll('.chip').forEach(b=>b.classList.toggle('on',b===el));break;
     case 'newcat':{const b=$('#newcat');if(b.classList.contains('hide')){b.innerHTML=newCatForm('nc',S.cats);b.classList.remove('hide');$('#nc-name').focus();}else{b.classList.add('hide');b.innerHTML='';}break;}
-    case 'addcat':{const f=NF.nc;const c=addCategory($('#nc-name').value,f.icon,f.color);if(!c)break;edit.cat=c.id;$('#catchips').innerHTML=catChips(c.id);$('#newcat').classList.add('hide');$('#newcat').innerHTML='';break;}
+    case 'addcat':{const f=NF.nc;if(!$('#nc-name').value.trim()){toast('Введите название');break;}if(!f.picked&&f.icon==='📌'){toast('Выберите значок');$('#nc-icons').scrollIntoView({block:'nearest'});break;}const c=addCategory($('#nc-name').value,f.icon,f.color);if(!c)break;edit.cat=c.id;$('#catchips').innerHTML=catChips(c.id);$('#newcat').classList.add('hide');$('#newcat').innerHTML='';break;}
     case 'cats':openCats();break;
     case 'cmcolor':{readCatInputs();const id=el.closest('.sub').dataset.cid;catPick=catPick===id?null:id;$('#catlist').innerHTML=catRows();break;}
     case 'nficon':{const f=NF[d.p];f.icon=d.e;f.picked=true;nfRefresh(d.p);break;}
@@ -1388,10 +1403,18 @@ document.addEventListener('click',e=>{
     case 'cmseticon':{readCatInputs();const c=catDraft.find(x=>x.id===catPick);if(c)c.icon=d.e;$('#catlist').innerHTML=catRows();break;}
     case 'cmsetcolor':{readCatInputs();const c=catDraft.find(x=>x.id===catPick);if(c)c.color=d.c;$('#catlist').innerHTML=catRows();break;}
     case 'cmdel':{readCatInputs();catDraft=catDraft.filter(x=>x.id!==el.closest('.sub').dataset.cid);$('#catlist').innerHTML=catRows();break;}
-    case 'cmadd':{readCatInputs();const n=$('#cm-name').value.trim();if(!n){toast('Введите название');break;}
-      if(catDraft.some(c=>c.name.trim().toLowerCase()===n.toLowerCase())){toast('Такая категория уже есть');break;}
-      const f=NF.cm;catDraft.push({id:uid(),name:n,icon:f.icon,color:f.color});$('#catlist').innerHTML=catRows();
-      $('#cm-name').closest('.fld').outerHTML=`<div class="fld"><div class="fl"><label>Новая категория</label></div>${newCatForm('cm',catDraft)}</div>`;toast('Добавлено — не забудьте «Сохранить»');break;}
+    case 'cmadd':{const n=$('#cm-name').value.trim(),f=NF.cm;if(!n){toast('Введите название');break;}
+      if(S.cats.some(c=>c.name.trim().toLowerCase()===n.toLowerCase())){toast('Такая категория уже есть');break;}
+      if(!f.picked&&f.icon==='📌'){toast('Выберите значок');$('#cm-icons').scrollIntoView({block:'nearest'});break;}
+      addCategory(n,f.icon,f.color);$('#cmform').innerHTML=newCatForm('cm',S.cats);catsRefresh();toast('Категория добавлена');break;}
+    case 'cmopen':catKeepName();catOpen=d.cid;catsRefresh();$('#catlist .catedit').scrollIntoView({block:'nearest'});break;
+    case 'cesetcolor':{catKeepName();const c=S.cats.find(x=>x.id===catOpen);if(c){c.color=d.c;catApply(c);save();}catsRefresh();break;}
+    case 'ceseticon':{catKeepName();const c=S.cats.find(x=>x.id===catOpen);if(c){c.icon=d.e;catApply(c);save();}catsRefresh();break;}
+    case 'cedone':{const n=$('#ce-name').value.trim();if(!n){toast('Введите название');break;}const c=S.cats.find(x=>x.id===catOpen);if(c)c.name=n;catOpen=null;save();catsRefresh();break;}
+    case 'cedel':{const c=S.cats.find(x=>x.id===catOpen);if(!c)break;const cnt=catCount(c.id);
+      ask('Удалить категорию «'+c.name+'»?',cnt?`${cnt} ${plural(cnt,['запись останется','записи останутся','записей останутся'])} без категории.`:'',[{label:'Удалить',value:'y',cls:'danger'}]).then(v=>{
+        if(v){S.cats=S.cats.filter(x=>x.id!==c.id);for(const it of S.items)if(it.cat===c.id){delete it.cat;it.color=NOCAT;it.icon=it.type==='goal'?'🎯':'';}catOpen=null;save();render();toast('Категория удалена');}
+        setTimeout(openCats,240);});break;}
     case 'cmsave':saveCats();break;
     case 'pf':pf=d.f;render();break;
     case 'cdb':S.settings.cdBdays=d.v==='1';save();render();break;
@@ -1441,7 +1464,8 @@ document.addEventListener('input',e=>{const p=e.target.dataset&&e.target.dataset
 document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
   if(e.target.id==='f-title'){e.preventDefault();e.target.blur();}
   if(e.target.id==='nc-name'){e.preventDefault();$('[data-act="addcat"]').click();}
-  if(e.target.id==='cm-name'){e.preventDefault();$('[data-act="cmadd"]').click();}});
+  if(e.target.id==='cm-name'){e.preventDefault();$('[data-act="cmadd"]').click();}
+  if(e.target.id==='ce-name'){e.preventDefault();$('[data-act="cedone"]').click();}});
 
 /* кнопка «Назад» на Android */
 window.__back=()=>{if(sheetOpen){closeSheet();return true;}if(tab!=='today'){tab='today';render();return true;}return false;};
