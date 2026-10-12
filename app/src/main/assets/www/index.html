@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-12d">
+<meta name="blizko-ui" content="2026-10-12f">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -657,7 +657,6 @@ const TABS=[
   ['tasks','Задачи','<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.3 1.3L7 5M3.5 12l1.3 1.3L7 11M3.5 18l1.3 1.3L7 17"/></svg>'],
   ['goals','Цели','<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg>'],
   ['people','Люди','<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.8a3.3 3.3 0 0 1 0 6.4M18 14.7c1.9.6 3 2.4 3.5 5.3"/></svg>'],
-  ['money','Деньги','<svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M2.5 10h19M16.5 14.5h1.5"/><path d="M6 6l9.5-3 1.5 3"/></svg>'],
 ];
 function renderNav(){$('#nav').innerHTML=TABS.map(([id,l,ic])=>`<button class="${tab===id?'on':''}" data-act="tab" data-tab="${id}"><span class="pill">${ic}</span>${l}</button>`).join('');}
 function render(){
@@ -679,7 +678,7 @@ function metaFor(it,k,showDate){
   if(it.type==='habit'){const st=habitStreak(it);if(st>0)m.push(`🔥 ${st}`);}
   if(isRep(it))m.push('↻ '+repLabel(it.repeat));
   const sc=subCount(it,k);if(sc)m.push(`☑ ${sc[0]}/${sc[1]}`);
-  const sv=shopSum(it);if(sv){const ff=it.fund&&fundOf(it.fund),fl=ff&&lineOf(ff,it.fline);m.push(`<span class="shopm">💳 ${money(sv)}${ff?' · '+esc(ff.icon)+(fl?' '+esc(fl.name):''):''}</span>`);}
+  const sv=shopSum(it);if(sv){const ff=null,fl=ff&&lineOf(ff,it.fline);m.push(`<span class="shopm">💳 ${money(sv)}${ff?' · '+esc(ff.icon)+(fl?' '+esc(fl.name):''):''}</span>`);}
   const sl=shopList(it);if(sl.length&&k){const b=sl.length-shopLeft(it,k).length;m.push(`<span class="${b<sl.length?'shopm':''}">🛒 ${b}/${sl.length}</span>`);}
   if(it.remind!=null&&it.remind!=='')m.push('🔔');
   if(it.cd)m.push('⏳');
@@ -1047,6 +1046,7 @@ function paySuggest(f,kind){const p=fundPlan(f);return kind==='zp'?Math.min(p.ne
 function paydayDue(){const t=today(),p=lastPayday(t);if(S.paid[p.k]||diffDays(p.k,t)>5)return null;const s=S.funds.reduce((a,f)=>a+paySuggest(f,p.kind),0);return s>0?{...p,sum:s}:null;}
 /* дело с суммой и статьёй: отметили выполненным — списание, сняли отметку — отмена */
 function syncFundOp(it,k,v){
+  return;
   if(!it||!it.fund||!shopSum(it))return;
   const old=S.ops.filter(o=>o.itemId===it.id&&o.k===k);
   if(old.length){const trs=new Set(old.map(o=>o.cov).filter(Boolean));S.ops=S.ops.filter(o=>!(o.itemId===it.id&&o.k===k)&&!(o.tr&&trs.has(o.tr)));}
@@ -1400,7 +1400,6 @@ function openItem(id,preset={},ctxK=''){
     <div id="shopbox" class="${edit.needShop?'':'hide'}">
       <div class="fl"><label>Сумма<div class="hint">попадёт в «Траты на неделю» в календаре</div></label><input type="number" class="small" style="width:110px" id="f-shopsum" min="0" step="any" inputmode="decimal" value="${+edit.shopSum>0?esc(edit.shopSum):''}" placeholder="₽"></div>
       <div class="fl"><label>Напомнить за неделю<div class="hint">подсказка на главном и уведомление</div></label><span class="toggle"><input type="checkbox" id="f-shoprem" ${edit.shopRemind===false?'':'checked'}><span></span></span></div>
-      <div class="fl"><label>Списать из<div class="hint">когда отметите дело выполненным</div></label><select id="f-fund"><option value="">Не списывать</option>${S.funds.map(f=>`<optgroup label="${esc(f.icon+' '+f.name)}">${(f.lines||[]).map(l=>`<option value="${f.id}|${l.id}" ${edit.fund===f.id&&edit.fline===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}<option value="${f.id}|" ${edit.fund===f.id&&!edit.fline?'selected':''}>Непредвиденное</option></optgroup>`).join('')}</select></div>
       <div class="fl"><label>Что купить<div class="hint">можно не заполнять</div></label></div>
       <div id="shops">${(edit.shop||[]).map(x=>shopRow(x,shopBought(edit,x.id,k))).join('')}</div>
       <div style="padding:6px 0 10px"><button type="button" class="btn sm" data-act="addshop">+ что купить</button></div>
@@ -1514,8 +1513,8 @@ function readShop(it,k){
     const id=el.dataset.sid,on=el.querySelector('.chk').classList.contains('on');list.push({id,t,done:isRep(it)?false:on});if(on)bought.push(id);});
   it.shop=list;it.needShop=$('#f-needshop').checked;
   const sv=parseFloat($('#f-shopsum').value);it.shopSum=sv>0?sv:null;it.shopRemind=$('#f-shoprem').checked;
-  {const v=$('#f-fund').value;if(v){const [a,b]=v.split('|');it.fund=a;it.fline=b||'';}else{delete it.fund;delete it.fline;}}
-  if(!it.needShop){it.shopSum=null;delete it.fund;delete it.fline;}
+  {const v=$('#f-fund')&&$('#f-fund').value;if(v){const [a,b]=v.split('|');it.fund=a;it.fline=b||'';}else{delete it.fund;delete it.fline;}}
+  if(!it.needShop)it.shopSum=null;delete it.fund;delete it.fline;
   if(isRep(it)&&k){it.shopDone=it.shopDone||{};it.shopDone[k]=bought;}
   if(!it.needShop){delete it.shopDone;}
 }
@@ -1742,7 +1741,7 @@ function buildAlarms(){
     if(s.agenda){const its=itemsOn(k).filter(it=>!(isCheck(it)&&isDone(it,k)));const t=atMs(k,s.agendaTime);
       if(its.length&&t>now)out.push({id:hid('a'+k),at:t,ch:'day',title:`План на сегодня: ${its.length} ${plural(its.length,['пункт','пункта','пунктов'])}`,text:its.slice(0,6).map(it=>(it.time?it.time+' ':'')+it.title).join(' · ')});}
   }
-  for(let i=0;i<H;i++){const k=addDays(k0,i),dd=pdate(k).getDate();if(dd!==12&&dd!==25)continue;const kind=dd===12?'zp':'av';
+  for(let i=0;i<0;i++){const k=addDays(k0,i),dd=pdate(k).getDate();if(dd!==12&&dd!==25)continue;const kind=dd===12?'zp':'av';
     const pt=S.funds.reduce((a,f)=>{const p=fundPlan(f,ym(k));return a+(kind==='zp'?r0(p.target*2/3):r0(p.target/3));},0);
     if(!pt||S.paid[k])continue;const t=atMs(k,s.morning);if(t>now)out.push({id:hid('pay'+k),at:t,ch:'day',title:`💰 ${payName(kind)} — отложить по плану`,text:`Примерно ${money(pt)} — откройте «Деньги» → «Внести»`});}
   for(const it of S.items){if(it.type!=='goal'||it.done||!it.due||it.remind==null||it.remind==='')continue;
@@ -1909,7 +1908,7 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
 window.__back=()=>{if(sheetOpen){closeSheet();return true;}if(tab!=='today'){tab='today';render();return true;}return false;};
 /* возврат в приложение: обновить «сегодня» и перепланировать */
 let lastDay=today();
-window.__resume=()=>{if(staleUi()&&!sheetOpen){applyUpdate();return;}if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today();}if(carryOver()|moneyTick())save();if(!sheetOpen)render();scheduleNow();};
+window.__resume=()=>{if(staleUi()&&!sheetOpen){applyUpdate();return;}if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today();}if(carryOver())save();if(!sheetOpen)render();scheduleNow();};
 setInterval(()=>{if(today()!==lastDay)window.__resume();},60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.__resume();});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);
@@ -1928,7 +1927,7 @@ window.__updateResult=r=>{
 };
 try{if(localStorage.getItem('blizko.updated')){localStorage.removeItem('blizko.updated');setTimeout(()=>toast('Приложение обновлено · версия '+UIVER),400);}}catch(e){}
 
-if(carryOver()|moneyTick())save();
+if(carryOver())save();
 applyTheme();render();scheduleNow();
 try{if(window.Native&&Native.ready)Native.ready();}catch(e){}
 </script>
