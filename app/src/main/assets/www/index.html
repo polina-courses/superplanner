@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="blizko-ui" content="2026-10-08f">
+<meta name="blizko-ui" content="2026-10-12d">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Близко</title>
 <style>
@@ -161,6 +161,24 @@ textarea{resize:none;min-height:64px}
 .ask{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .ask .btn{padding:14px}
 .muted{color:var(--muted)}
+.mtop{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);margin:4px 0 0}
+.mtop.small{margin-bottom:10px}
+.mt-l{font-size:12.5px;color:var(--muted)}
+.mt-v{font-family:var(--serif);font-size:30px;font-weight:600;line-height:1.15;margin:2px 0 4px}
+.mt-r{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.pos{color:var(--ok)}.neg{color:var(--warn)}
+.fbal{flex:none;font-size:16px}
+.payday{width:100%;display:flex;align-items:center;gap:10px;background:var(--soft);border-radius:14px;padding:12px 14px;margin-top:10px;text-align:left}
+.payday span{flex:1;display:flex;flex-direction:column;font-weight:600}
+.payday i{font-style:normal;font-weight:400;font-size:12.5px;color:var(--muted)}
+.payday b{color:var(--accent);font-size:14px}
+.mbtns{display:flex;gap:10px;margin:12px 0}
+.mbtns .btn{flex:1;padding:12px}
+.mtot{display:flex;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:13.5px;color:var(--muted)}
+.fbal .of{display:block;font-style:normal;font-weight:400;font-size:11px;color:var(--muted);text-align:right}
+.muted-row .t{color:var(--muted)}
+.upmore{float:right;font-size:12.5px;color:var(--muted);margin:-2px 2px 4px}
+.uprow{clear:both}
 .catedit{padding:8px 14px 6px;border-top:1px solid var(--line);background:var(--card2)}
 .catedit:first-child{border-top:0}
 .cdot{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:6px}
@@ -439,8 +457,14 @@ function migrateCats(d){
   for(const it of d.items){const c=d.cats.find(x=>x.id===it.cat);if(c){it.color=c.color;it.icon=c.icon;}}
   d.settings.catsV2=true;
 }
+const DEFFUNDS=()=>[
+  {id:'f-pets',name:'Животные',icon:'🐾',color:'#7A9A3A',lines:[]},
+  {id:'f-health',name:'Здоровье',icon:'🩺',color:'#2E8B7A',lines:[]},
+  {id:'f-beauty',name:'Красота',icon:'💅',color:'#B5487A',lines:[]},
+  {id:'f-fun',name:'Развлечения',icon:'🎉',color:'#6B5CA5',lines:[]},
+  {id:'f-once',name:'На разовое',icon:'🐷',color:'#D9922E',lines:[]}];
 let S=load();
-function blank(){return {v:1,items:[],people:[],cats:DEFCATS(),settings:{theme:'auto',morning:'09:00',agenda:true,agendaTime:'08:00',nBday:true,defRemind:'15',carry:'task',cdBdays:true,tip:true}};}
+function blank(){return {v:1,items:[],people:[],cats:DEFCATS(),funds:DEFFUNDS(),ops:[],paid:{},settings:{theme:'auto',morning:'09:00',agenda:true,agendaTime:'08:00',nBday:true,defRemind:'15',carry:'task',cdBdays:true,tip:true}};}
 function load(){
   let raw=null;
   try{if(window.Native&&Native.load)raw=Native.load();}catch(e){}
@@ -455,6 +479,8 @@ function normalize(d){
   d.people=Array.isArray(d.people)?d.people:[];
   d.settings=Object.assign(b.settings,d.settings||{});
   d.cats=Array.isArray(d.cats)?d.cats:DEFCATS();
+  d.funds=Array.isArray(d.funds)?d.funds:DEFFUNDS();d.ops=Array.isArray(d.ops)?d.ops:[];d.paid=d.paid&&typeof d.paid==='object'?d.paid:{};
+  migrateFunds(d);
   migrateCats(d);
   if(!d.settings.catsV3){for(const c of d.cats){const g=guessIcon(c.name);if(g)c.icon=g;}for(const it of d.items){const c=d.cats.find(x=>x.id===it.cat);if(c)it.icon=c.icon;}d.settings.catsV3=true;}
   d.v=1;return d;
@@ -472,6 +498,7 @@ function setDone(it,k,v){
   if(isRep(it)){it.doneDates=(it.doneDates||[]).filter(x=>x!==k);if(v)it.doneDates.push(k);
     if(it.doneDates.length>400)it.doneDates=it.doneDates.sort().slice(-400);}
   else{it.done=v;it.doneAt=v?Date.now():null;if(it.goalId)stepDoneChanged(it);}
+  syncFundOp(it,k||it.date,v);
 }
 function subDone(it,sid,k){return isRep(it)?((it.subDone||{})[k]||[]).includes(sid):!!(it.subs.find(s=>s.id===sid)||{}).done;}
 function subCount(it,k){if(!it.subs||!it.subs.length)return null;let n=0;for(const s of it.subs)if(subDone(it,s.id,k))n++;return [n,it.subs.length];}
@@ -630,13 +657,13 @@ const TABS=[
   ['tasks','Задачи','<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.3 1.3L7 5M3.5 12l1.3 1.3L7 11M3.5 18l1.3 1.3L7 17"/></svg>'],
   ['goals','Цели','<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg>'],
   ['people','Люди','<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.8a3.3 3.3 0 0 1 0 6.4M18 14.7c1.9.6 3 2.4 3.5 5.3"/></svg>'],
-  ['count','Отсчёт','<svg viewBox="0 0 24 24"><path d="M6 2.5h12M6 21.5h12M7 2.5c0 4.5 5 6 5 9.5s-5 5-5 9.5M17 2.5c0 4.5-5 6-5 9.5s5 5 5 9.5"/></svg>'],
+  ['money','Деньги','<svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M2.5 10h19M16.5 14.5h1.5"/><path d="M6 6l9.5-3 1.5 3"/></svg>'],
 ];
 function renderNav(){$('#nav').innerHTML=TABS.map(([id,l,ic])=>`<button class="${tab===id?'on':''}" data-act="tab" data-tab="${id}"><span class="pill">${ic}</span>${l}</button>`).join('');}
 function render(){
   renderNav();
   $('#htitle').textContent=TABS.find(t=>t[0]===tab)[1];
-  const v={today:vToday,cal:vCal,tasks:vTasks,goals:vGoals,people:vPeople,count:vCount}[tab]();
+  const v={today:vToday,cal:vCal,tasks:vTasks,goals:vGoals,people:vPeople,money:vMoney}[tab]();
   $('#main').innerHTML=v;
 }
 const section=(title,body,cls='',extra='')=>`<div class="sec ${cls}"><h2>${title}${extra}</h2><div class="card">${body}</div></div>`;
@@ -652,7 +679,7 @@ function metaFor(it,k,showDate){
   if(it.type==='habit'){const st=habitStreak(it);if(st>0)m.push(`🔥 ${st}`);}
   if(isRep(it))m.push('↻ '+repLabel(it.repeat));
   const sc=subCount(it,k);if(sc)m.push(`☑ ${sc[0]}/${sc[1]}`);
-  const sv=shopSum(it);if(sv)m.push(`<span class="shopm">💳 ${money(sv)}</span>`);
+  const sv=shopSum(it);if(sv){const ff=it.fund&&fundOf(it.fund),fl=ff&&lineOf(ff,it.fline);m.push(`<span class="shopm">💳 ${money(sv)}${ff?' · '+esc(ff.icon)+(fl?' '+esc(fl.name):''):''}</span>`);}
   const sl=shopList(it);if(sl.length&&k){const b=sl.length-shopLeft(it,k).length;m.push(`<span class="${b<sl.length?'shopm':''}">🛒 ${b}/${sl.length}</span>`);}
   if(it.remind!=null&&it.remind!=='')m.push('🔔');
   if(it.cd)m.push('⏳');
@@ -743,8 +770,9 @@ function upcoming(n){
 }
 function upRow(){
   const u=upcoming(4);if(!u.length)return '';
+  const more=`<button class="upmore" data-act="countall">Весь отсчёт ›</button>`;
   const t=today();
-  return `<div class="uprow">${u.map(x=>{const n=diffDays(t,x.k);
+  return more+`<div class="uprow">${u.map(x=>{const n=diffDays(t,x.k);
     return `<button class="up" style="--c:${x.c}" ${x.act}><span class="up-n">${n===0?'<b class="now">сегодня</b>':n===1?'<b class="now">завтра</b>':`<b>${n}</b><i>${plural(n,['день','дня','дней'])}</i>`}</span><span class="up-t">${esc(x.icon)} ${esc(x.title)}</span><span class="up-d">${dayMonth(x.k)}</span></button>`;}).join('')}</div>`;
 }
 function vCal(){
@@ -902,6 +930,7 @@ function vPeople(){
   return h;
 }
 
+function openCountSheet(){openSheet(`<div class="shead"><h3>Отсчёт</h3></div>${vCount()}<div class="actions"><button type="button" class="btn pri" data-act="close">Готово</button></div>`);}
 function vCount(){
   const t=today(), e=[];
   for(const it of S.items){if(!it.cd)continue;const k=nextDateFor(it,t);if(k)e.push({k,title:it.title,icon:it.icon||'⏳',c:it.color,act:`data-act="edit" data-id="${it.id}" data-k="${k}"`});}
@@ -911,6 +940,370 @@ function vCount(){
   if(!e.length)return h+section('Отсчёт',empty('Включите «Обратный отсчёт» в событии или задаче — и здесь появится, сколько дней осталось.'));
   return h+`<div class="card">${e.map(x=>{const n=diffDays(t,x.k);
     return `<div class="cd row" ${x.act}><div class="big ${n===0?'now':''}">${n===0?'<b>сегодня</b>':`<b>${n}</b><span>${plural(n,['день','дня','дней'])}</span>`}</div><span class="ico">${esc(x.icon)}</span><div class="txt"><div class="t">${esc(x.title)}</div><div class="m"><span>${WDL[dow(x.k)]}, ${dayMonth(x.k)} ${pdate(x.k).getFullYear()}</span></div></div></div>`;}).join('')}</div>`;
+}
+
+/* ============ деньги: категории со статьями, взносы, резерв ============ */
+/*
+  Категория (fund): {id,name,icon,color,lines:[line]}
+  Статья (line): {id,name,kind,amount,n,next,monthly}
+    kind: 'month' — каждый месяц amount (остаток в конце месяца уходит в резерв)
+          'every' — amount раз в n месяцев, ближайшая трата next (копится, после даты цикл повторяется)
+          'date'  — amount к дате next (разово)
+          'sum'   — копить по monthly в месяц, пока не наберётся amount
+          'open'  — копить по monthly в месяц без цели
+  Резерв категории «Непредвиденное» — статья с id '' (пустая строка).
+  Операция (op): {id,fund,line,type:'in'|'out',sum,date,note, dep?:группа взноса, tr?:группа переноса, adj?:правка остатка, itemId?,k?}
+*/
+const RES='';
+const ym=k=>k.slice(0,7);
+const monthsBetween=(a,b)=>{const [ay,am]=a.split('-').map(Number),[by,bm]=b.split('-').map(Number);return (by-ay)*12+(bm-am);};
+const addMonths=(k,n)=>{const d=pdate(k),day=d.getDate(),x=new Date(d.getFullYear(),d.getMonth()+n,1);x.setDate(Math.min(day,dim(x.getFullYear(),x.getMonth())));return dkey(x);};
+const fundOf=id=>S.funds.find(f=>f.id===id);
+const lineOf=(f,id)=>f&&(f.lines||[]).find(l=>l.id===id);
+const lineBal=(fid,lid)=>S.ops.reduce((a,o)=>o.fund===fid&&(o.line||'')===lid?a+(o.type==='in'?o.sum:-o.sum):a,0);
+const fundBal=fid=>S.ops.reduce((a,o)=>o.fund===fid?a+(o.type==='in'?o.sum:-o.sum):a,0);
+const totalBal=()=>S.funds.reduce((a,f)=>a+fundBal(f.id),0);
+const numIn=v=>{const n=parseFloat(String(v).replace(/\s/g,'').replace(',','.'));return n>0?Math.round(n*100)/100:0;};
+const r0=n=>Math.round(n);
+const KINDS=[['month','Каждый месяц'],['every','Раз в N месяцев / раз в год'],['date','К дате (разово)'],['sum','До суммы'],['open','Просто копить']];
+
+/* сколько статья уже получила в этом месяце (взносы и переносы, без правок остатка) */
+function allocM(fid,lid,M){const f=fundOf(fid),l=f&&lineOf(f,lid),mon=l&&l.kind==='month';
+  return S.ops.reduce((a,o)=>o.fund===fid&&(o.line||'')===lid&&o.type==='in'&&(!o.adj||mon)&&!o.sweep&&(!o.tr||o.fill)&&ym(o.date)===M?a+o.sum:a,0);}
+/* сколько по ежемесячной статье уже оплачено в этом месяце (до учёта в приложении) */
+const prepaidM=(fid,lid,M)=>S.ops.reduce((a,o)=>o.fund===fid&&o.line===lid&&o.prepaid&&o.type==='out'&&ym(o.date)===M?a+o.sum:a,0);
+/* движение статьи за месяц без правок остатка и без переноса остатков на начало месяца — чтобы «уже накоплено» считалось накопленным заранее */
+function netM(fid,lid,M){return S.ops.reduce((a,o)=>o.fund===fid&&(o.line||'')===lid&&!o.adj&&!o.sweep&&ym(o.date)===M?a+(o.type==='in'?o.sum:-o.sum):a,0);}
+/* план статьи на месяц M (не меняется в течение месяца) */
+function lineTarget(f,l,M){
+  const bal0=lineBal(f.id,l.id)-netM(f.id,l.id,M);
+  switch(l.kind){
+    case 'month':return +l.amount||0;
+    case 'every':case 'date':{
+      if(!l.next)return 0;
+      if(l.kind==='date'&&ym(l.next)<M)return 0;
+      const rem=Math.max(0,(+l.amount||0)-bal0),m=Math.max(1,monthsBetween(M,ym(l.next)));return rem/m;}
+    case 'sum':return bal0>=(+l.amount||0)?0:Math.min(+l.monthly||0,(+l.amount||0)-bal0);
+    case 'open':return +l.monthly||0;
+  }
+  return 0;
+}
+const lineNeed=(f,l,M)=>Math.max(0,r0(lineTarget(f,l,M))-allocM(f.id,l.id,M));
+function fundPlan(f,M=ym(today())){let t=0,need=0;for(const l of f.lines||[]){t+=r0(lineTarget(f,l,M));need+=lineNeed(f,l,M);}return {target:t,need,got:Math.max(0,t-need)};}
+const allPlan=()=>S.funds.reduce((a,f)=>{const p=fundPlan(f);a.target+=p.target;a.need+=p.need;return a;},{target:0,need:0});
+
+/* раскладка взноса: сначала ежемесячные статьи, потом накопительные пропорционально, излишек — в резерв */
+function deposit(fid,sum,note,date){
+  const f=fundOf(fid);if(!f||!(sum>0))return [];
+  const M=ym(date||today()),gid=uid(),put=[];let rest=sum;
+  for(const l of (f.lines||[]).filter(l=>l.kind==='month')){const g=Math.min(lineNeed(f,l,M),rest);if(g>0){put.push([l.id,g]);rest-=g;}}
+  const acc=(f.lines||[]).filter(l=>l.kind!=='month').map(l=>[l.id,lineNeed(f,l,M)]).filter(x=>x[1]>0);
+  const tot=acc.reduce((a,x)=>a+x[1],0);
+  if(tot>0&&rest>0){
+    if(rest>=tot){for(const [id,n] of acc){put.push([id,n]);}rest-=tot;}
+    else{let used=0;acc.forEach(([id,n],i)=>{const g=i===acc.length-1?rest-used:Math.floor(n*rest/tot);if(g>0){put.push([id,g]);used+=g;}});rest=0;}
+  }
+  if(rest>0)put.push([RES,rest]);
+  const d=date||today();
+  for(const [lid,s] of put)S.ops.push({id:uid(),fund:fid,line:lid,type:'in',sum:Math.round(s*100)/100,date:d,note:note||'Взнос',dep:gid});
+  return put;
+}
+function transfer(fid,from,to,sum,note,date,extra){
+  if(!(sum>0))return;const g=uid(),d=date||today();
+  S.ops.push({id:uid(),fund:fid,line:from,type:'out',sum,date:d,note,tr:g,...(extra||{})},{id:uid(),fund:fid,line:to,type:'in',sum,date:d,note,tr:g,...(extra||{})});
+}
+/* перерасход статьи закрывается из резерва категории */
+function coverFromReserve(fid,lid,date){
+  if(lid===RES)return 0;const b=lineBal(fid,lid);if(b>=0)return 0;
+  const c=Math.min(-b,Math.max(0,lineBal(fid,RES)));if(c>0)transfer(fid,RES,lid,c,'Покрыто из непредвиденного',date);return c;
+}
+/* трата из статьи */
+function spend(fid,lid,sum,note,date,extra){
+  S.ops.push({id:uid(),fund:fid,line:lid,type:'out',sum,date:date||today(),note,...(extra||{})});
+  return coverFromReserve(fid,lid,date);
+}
+/* начало месяца: остатки ежемесячных статей → в резерв; у периодических статей сдвигаем срок */
+function moneyTick(){
+  const t=today(),M=ym(t);let ch=false;
+  for(const f of S.funds)for(const l of f.lines||[])if(l.kind==='every'&&l.next&&+l.n>0){while(l.next<t){l.next=addMonths(l.next,+l.n);ch=true;}}
+  if(!S.swept){S.swept=M;return true;}
+  if(S.swept<M){
+    const d=M+'-01';
+    for(const f of S.funds)for(const l of f.lines||[])if(l.kind==='month'){const b=lineBal(f.id,l.id);if(b>0)transfer(f.id,l.id,RES,b,'Остаток «'+l.name+'» за прошлый месяц',d,{sweep:1});}
+    S.swept=M;ch=true;
+  }
+  return ch;
+}
+/* последняя выплата (12 — ЗП, 25 — аванс) */
+function lastPayday(t){
+  const d=pdate(t),y=d.getFullYear(),m=d.getMonth(),c=[];
+  for(const [yy,mm] of [[y,m],[m?y:y-1,m?m-1:11]])for(const day of [12,25])c.push(dkey(new Date(yy,mm,day)));
+  const k=c.filter(x=>x<=t).sort().pop();
+  return {k,kind:pdate(k).getDate()===12?'zp':'av'};
+}
+const payName=kind=>kind==='zp'?'Зарплата':'Аванс';
+/* сколько предложить внести в категорию с этой выплаты: ЗП — 2/3 месячного плана, аванс — остаток плана */
+function paySuggest(f,kind){const p=fundPlan(f);return kind==='zp'?Math.min(p.need,r0(p.target*2/3)):p.need;}
+function paydayDue(){const t=today(),p=lastPayday(t);if(S.paid[p.k]||diffDays(p.k,t)>5)return null;const s=S.funds.reduce((a,f)=>a+paySuggest(f,p.kind),0);return s>0?{...p,sum:s}:null;}
+/* дело с суммой и статьёй: отметили выполненным — списание, сняли отметку — отмена */
+function syncFundOp(it,k,v){
+  if(!it||!it.fund||!shopSum(it))return;
+  const old=S.ops.filter(o=>o.itemId===it.id&&o.k===k);
+  if(old.length){const trs=new Set(old.map(o=>o.cov).filter(Boolean));S.ops=S.ops.filter(o=>!(o.itemId===it.id&&o.k===k)&&!(o.tr&&trs.has(o.tr)));}
+  const f=fundOf(it.fund);if(!v||!f)return;
+  const lid=lineOf(f,it.fline)?it.fline:RES,g=uid();
+  S.ops.push({id:uid(),fund:f.id,line:lid,type:'out',sum:shopSum(it),date:today(),note:it.title,itemId:it.id,k,cov:g});
+  const b=lineBal(f.id,lid);if(lid!==RES&&b<0){const c=Math.min(-b,Math.max(0,lineBal(f.id,RES)));if(c>0)S.ops.push({id:uid(),fund:f.id,line:RES,type:'out',sum:c,date:today(),note:'Покрыто из непредвиденного',tr:g,itemId:it.id,k},{id:uid(),fund:f.id,line:lid,type:'in',sum:c,date:today(),note:'Покрыто из непредвиденного',tr:g,itemId:it.id,k});}
+}
+/* старые копилки → категории; деньги в резерв */
+function migrateFunds(d){
+  for(const f of d.funds){if(!Array.isArray(f.lines))f.lines=[];delete f.p12;delete f.p25;delete f.target;}
+  for(const o of d.ops)if(o.line===undefined)o.line='';
+  if(!d.settings.fundsV2){
+    const pets=d.funds.find(f=>f.id==='f-pets');
+    if(pets&&!pets.lines.length){const y=pdate(today()).getFullYear(),jan=(pdate(today()).getMonth()===0?y:y+1)+'-01-01';
+      pets.lines=[{id:'l-dog1',name:'Собака — сухой корм 1,5 кг',kind:'month',amount:1600},{id:'l-dog2',name:'Собака — влажный корм',kind:'month',amount:1600},
+        {id:'l-cat1',name:'Кошка — сухой корм 1,5 кг',kind:'month',amount:1600},{id:'l-cat2',name:'Кошка — влажный корм',kind:'month',amount:1600},
+        {id:'l-vac',name:'Прививки',kind:'every',amount:4600,n:12,next:jan}];}
+    d.settings.fundsV2=true;
+  }
+  /* категория «Дитятка» — по списку Полины (12.10.2026) */
+  if(!d.settings.fundKids){
+    if(!d.funds.some(f=>/дитят/i.test(f.name)))d.funds.push({id:'f-kids',name:'Дитятка',icon:'👧',color:'#B5487A',lines:[
+      {id:'k-grad',name:'Выпускной',kind:'date',amount:50000,next:'2027-05-01'},
+      {id:'k-ninel',name:'Нинель — 4 занятия × 900',kind:'month',amount:3600},
+      {id:'k-bio',name:'Биология — 4 занятия × 1 400',kind:'month',amount:5600},
+      {id:'k-pocket',name:'Карманные — 250 в неделю',kind:'month',amount:1000},
+      {id:'k-bday',name:'День рождения (7 декабря)',kind:'every',amount:12000,n:12,next:'2026-12-07'},
+      {id:'k-camp',name:'Лагеря (к лету)',kind:'every',amount:24000,n:12,next:'2027-06-01'}]});
+    d.settings.fundKids=true;
+  }
+}
+function lineDesc(f,l){
+  const M=ym(today()),tg=r0(lineTarget(f,l,M)),b=lineBal(f.id,l.id);
+  switch(l.kind){
+    case 'month':return money(l.amount)+' в месяц';
+    case 'every':return `${money(l.amount)} ${+l.n===12?'раз в год':+l.n===1?'каждый месяц':'раз в '+l.n+' '+plural(+l.n,['месяц','месяца','месяцев'])} · ближайшая — ${l.next?MN[pdate(l.next).getMonth()]+(pdate(l.next).getFullYear()!==pdate(today()).getFullYear()?' '+pdate(l.next).getFullYear():''):'—'}`;
+    case 'date':return l.next&&l.next<today()?`к ${dayMonth(l.next)} — срок прошёл`:`${money(l.amount)} к ${l.next?dayMonth(l.next)+' '+pdate(l.next).getFullYear():'—'}`;
+    case 'sum':return b>=(+l.amount||0)?`цель ${money(l.amount)} — накоплено ✓`:`по ${money(l.monthly)} в месяц до ${money(l.amount)}`;
+    case 'open':return `копится по ${money(l.monthly)} в месяц`;
+  }return '';
+}
+const isAcc=l=>l.kind!=='month';
+function lineGoal(l){return l.kind==='every'||l.kind==='date'||l.kind==='sum'?+l.amount||0:0;}
+
+let mtab='funds', mmon=today().slice(0,7);
+function vMoney(){
+  const t=today(),M=ym(t);
+  const real=o=>!o.tr&&!o.adj;
+  const inM=S.ops.filter(o=>ym(o.date)===M&&o.type==='in'&&real(o)).reduce((a,o)=>a+o.sum,0);
+  const outM=S.ops.filter(o=>ym(o.date)===M&&o.type==='out'&&real(o)).reduce((a,o)=>a+o.sum,0);
+  const ap=allPlan();
+  let h=`<div class="mtop"><div class="mt-l">Всего отложено</div><div class="mt-v">${money(totalBal())}</div>
+    <div class="mt-r"><span>План на ${MN[pdate(t).getMonth()]}: <b>${money(ap.target)}</b></span><span>${ap.need?'осталось внести <b>'+money(ap.need)+'</b>':'<b class="pos">всё внесено ✓</b>'}</span></div>
+    <div class="mt-r" style="margin-top:4px"><span>${inM?`внесено <b class="pos">+${money(inM)}</b>`:'взносов пока нет'}</span><span>${outM?`<b class="neg">−${money(outM)}</b>`:'трат нет'}</span></div></div>`;
+  const pd=paydayDue();
+  if(pd)h+=`<button class="payday" data-act="distribute" data-k="${pd.k}" data-kind="${pd.kind}"><span>💰 ${payName(pd.kind)} ${relDay(pd.k)}<i>отложить по плану ${money(pd.sum)}</i></span><b>Внести ›</b></button>`;
+  h+=`<div class="seg" style="margin:12px 0 10px"><button class="${mtab==='funds'?'on':''}" data-act="mtab" data-m="funds">Категории</button><button class="${mtab==='log'?'on':''}" data-act="mtab" data-m="log">Журнал</button></div>`;
+  if(mtab==='funds'){
+    h+=`<div class="card">${S.funds.length?S.funds.map(f=>{const b=fundBal(f.id),p=fundPlan(f),pct=p.target?Math.min(100,p.got/p.target*100):0;
+      const sub=(f.lines||[]).length?`план ${money(p.target)}/мес · ${p.need?'внести ещё '+money(p.need):'внесено ✓'}`:'статей нет — добавьте';
+      return `<div class="row" data-act="fund" data-id="${f.id}"><span class="ava" style="background:color-mix(in srgb,${f.color} 25%,transparent);font-size:21px">${esc(f.icon)}</span><div class="txt"><div class="t">${esc(f.name)}</div><div class="m"><span>${sub}</span></div>${p.target?`<div class="pbar"><i style="width:${pct}%;background:${f.color}"></i></div>`:''}</div><b class="fbal ${b<0?'neg':''}">${money(b)}</b></div>`;}).join(''):empty('Категорий пока нет')}</div>
+    <div class="mbtns"><button class="btn" data-act="fundnew">+ Категория</button><button class="btn" data-act="distribute">Внести по плану</button></div>`;
+  }else{
+    const [yy,mm]=mmon.split('-').map(Number);
+    const ops=S.ops.filter(o=>ym(o.date)===mmon);
+    const tin=ops.filter(o=>o.type==='in'&&real(o)).reduce((a,o)=>a+o.sum,0),tout=ops.filter(o=>o.type==='out'&&real(o)).reduce((a,o)=>a+o.sum,0);
+    h+=`<div class="calbar"><button class="iconbtn" data-act="mmon" data-d="-1"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><div class="title">${MN[mm-1]} ${yy}</div><button class="iconbtn" data-act="mmon" data-d="1"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>
+      <div class="mtot"><span>Внесено <b class="pos">+${money(tin)}</b></span><span>Потрачено <b class="neg">−${money(tout)}</b></span></div>`;
+    const ent=logEntries(ops);
+    if(!ent.length)h+=section('Операции',empty('В этом месяце операций нет'));
+    else{let last='',rows='';for(const e of ent){if(e.date!==last){if(rows)h+=section(relDay(last),rows);rows='';last=e.date;}rows+=e.html;}h+=section(relDay(last),rows);}
+  }
+  return h;
+}
+/* журнал: взнос — одной строкой, перенос — одной строкой */
+function logEntries(ops){
+  const seen=new Set(),out=[];
+  for(const o of ops.slice().sort((a,b)=>b.date.localeCompare(a.date))){
+    const f=fundOf(o.fund)||{icon:'❔',name:'удалённая категория',color:NOCAT,lines:[]};
+    const ln=id=>id===RES?'Непредвиденное':(lineOf(f,id)||{name:'удалённая статья'}).name;
+    if(o.dep){if(seen.has(o.dep))continue;seen.add(o.dep);const g=ops.filter(x=>x.dep===o.dep),s=g.reduce((a,x)=>a+x.sum,0);
+      out.push({date:o.date,html:`<div class="row" data-act="opgrp" data-g="${o.dep}"><span class="ava" style="background:color-mix(in srgb,${f.color} 22%,transparent);font-size:19px">${esc(f.icon)}</span><div class="txt"><div class="t">${esc(o.note||'Взнос')} → ${esc(f.name)}</div><div class="m"><span>${g.map(x=>esc(ln(x.line))+' '+money(x.sum)).join(' · ')}</span></div></div><b class="pos">+${money(s)}</b></div>`});continue;}
+    if(o.tr){if(seen.has(o.tr))continue;seen.add(o.tr);const a=ops.find(x=>x.tr===o.tr&&x.type==='out'),b=ops.find(x=>x.tr===o.tr&&x.type==='in');if(!a||!b)continue;
+      out.push({date:o.date,html:`<div class="row muted-row" data-act="opgrp" data-g="${o.tr}"><span class="ava" style="background:var(--card2);font-size:17px">↪</span><div class="txt"><div class="t">${esc(o.note||'Перенос')}</div><div class="m"><span>${esc(f.name)}: ${esc(ln(a.line))} → ${esc(ln(b.line))}</span></div></div><b>${money(a.sum)}</b></div>`});continue;}
+    out.push({date:o.date,html:`<div class="row" data-act="op" data-id="${o.id}"><span class="ava" style="background:color-mix(in srgb,${f.color} 22%,transparent);font-size:19px">${esc(f.icon)}</span><div class="txt"><div class="t">${esc(o.note||(o.type==='in'?'Пополнение':'Трата'))}</div><div class="m"><span>${esc(f.name)} · ${esc(ln(o.line))}${o.itemId?' · из дела':''}${o.adj?' · правка остатка':''}</span></div></div><b class="${o.type==='in'?'pos':'neg'}">${o.type==='in'?'+':'−'}${money(o.sum)}</b></div>`});
+  }
+  return out;
+}
+
+/* ----- категория: статьи, статусы ----- */
+function openFundView(id){
+  const f=fundOf(id);if(!f)return;const M=ym(today()),p=fundPlan(f);
+  const lines=(f.lines||[]).map(l=>{
+    const b=lineBal(f.id,l.id),tg=r0(lineTarget(f,l,M)),got=allocM(f.id,l.id,M),goal=lineGoal(l);
+    const pp=l.kind==='month'?prepaidM(f.id,l.id,M):0;
+    const st=l.kind==='month'?(got>=(+l.amount||0)?`на этот месяц закрыто ✓${pp?' (оплачено '+money(pp)+')':''}`:`в этом месяце ${money(got)} из ${money(l.amount)}${pp?' (из них оплачено '+money(pp)+')':''}`):(tg?`откладывать ${money(tg)}/мес${got<tg?' · внести ещё '+money(tg-got):' · ✓'}`:'в этом месяце не нужно');
+    const bar=goal?`<div class="pbar"><i style="width:${Math.min(100,Math.max(0,b/goal*100))}%;background:${f.color}"></i></div>`:'';
+    return `<div class="row" data-act="lineedit" data-id="${l.id}"><div class="txt"><div class="t">${esc(l.name)}</div><div class="m"><span>${lineDesc(f,l)}</span></div><div class="m"><span class="${l.kind!=='month'&&got<tg?'shopm':''}">${st}</span></div>${bar}</div><b class="fbal ${b<0?'neg':''}">${money(b)}${goal?`<i class="of">из ${money(goal)}</i>`:''}</b></div>`;}).join('');
+  const rb=lineBal(f.id,RES);
+  openSheet(`<div class="shead"><h3>${esc(f.icon)} ${esc(f.name)}</h3><button class="iconbtn" data-act="fundedit" data-id="${id}" aria-label="Изменить"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg></button></div>
+  <div class="mtop small"><div class="mt-l">Всего в категории</div><div class="mt-v">${money(fundBal(id))}</div><div class="mt-r"><span>план на месяц <b>${money(p.target)}</b></span><span>${p.need?'внести ещё <b>'+money(p.need)+'</b>':'<b class="pos">внесено ✓</b>'}</span></div></div>
+  <div class="mbtns"><button class="btn pri" data-act="opnew" data-t="in" data-id="${id}">+ Внести</button><button class="btn" data-act="opnew" data-t="out" data-id="${id}">− Потратила</button></div>
+  ${section('Статьи',lines||empty('Добавьте статьи: корм, прививки…'),'',`<button class="btn sm" style="margin-left:auto" data-act="linenew" data-id="${id}">+ статья</button>`)}
+  ${section('Резерв',`<div class="row" data-act="lineedit" data-id=""><div class="txt"><div class="t">🛟 Непредвиденное</div><div class="m"><span>излишки взносов и остатки ежемесячных статей; закрывает перерасход</span></div></div><b class="fbal ${rb<0?'neg':''}">${money(rb)}</b></div>`)}`);
+  fvId=id;
+}
+let fvId=null;
+
+/* ----- статья: создание и правка ----- */
+let ldraft=null;
+function openLine(fid,lid){
+  const f=fundOf(fid);if(!f)return;const src=lid!=null&&lid!==undefined?lineOf(f,lid):null;const isRes=lid===RES;
+  ldraft=src?{...src}:{id:uid(),name:'',kind:'month',amount:0,n:12,next:'',monthly:0};
+  const bal=isRes?lineBal(fid,RES):src?lineBal(fid,src.id):0;
+  if(isRes){
+    openSheet(`<div class="shead"><h3>🛟 Непредвиденное</h3></div><p class="muted small" style="margin:0 4px 8px">Сюда уходят излишки взносов и остатки ежемесячных статей. Отсюда закрывается перерасход. Можно вручную перекинуть деньги в отстающую статью.</p>
+    <div class="fld"><div class="fl"><label>Остаток сейчас<div class="hint">если отличается от реального — поправьте</div></label><input type="text" inputmode="decimal" class="small" style="width:120px" id="ln-bal" value="${r0(bal)}"></div></div>
+    ${(f.lines||[]).length?`<div class="fld"><div class="fl"><label>Перекинуть в статью</label></div><div class="fl"><select id="tr-to" style="flex:1">${f.lines.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select><input type="text" inputmode="decimal" class="small" style="width:100px" id="tr-sum" placeholder="₽"></div><div style="padding:0 0 10px"><button type="button" class="btn sm" data-act="restr" data-f="${fid}">Перекинуть</button></div></div>`:''}
+    <div class="actions"><button type="button" class="btn ghost" data-act="close">Отмена</button><button type="button" class="btn pri" data-act="linesave" data-f="${fid}" data-res="1">Сохранить</button></div>`);
+    return;
+  }
+  openSheet(`<div class="shead"><h3>${src?'Статья':'Новая статья'}</h3>${src?`<button class="iconbtn" data-act="linedel" data-f="${fid}" aria-label="Удалить"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/></svg></button>`:''}</div>
+  <div class="fld"><input type="text" id="ln-name" class="title-in" placeholder="Например: Кошка — сухой корм" value="${esc(ldraft.name)}" autocomplete="off"></div>
+  <div class="fld">
+    <div class="fl"><label>Как копить</label><select id="ln-kind">${KINDS.map(([v,l])=>`<option value="${v}" ${ldraft.kind===v?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="fl ln-amount"><label><span class="lk-month">Сумма в месяц</span><span class="lk-every">Сумма траты</span><span class="lk-date lk-sum">Сколько нужно</span></label><input type="text" inputmode="decimal" class="small" style="width:120px" id="ln-amount" value="${+ldraft.amount||''}" placeholder="₽"></div>
+    <div class="fl lk-every"><label>Как часто, месяцев<div class="hint">12 — раз в год, 3 — раз в квартал</div></label><input type="number" class="small" id="ln-n" min="1" max="120" value="${+ldraft.n||12}"></div>
+    <div class="fl lk-every lk-date"><label><span class="lk-every">Ближайшая трата</span><span class="lk-date">К какой дате</span><div class="hint">важен месяц — по нему считается, сколько откладывать</div></label><input type="date" id="ln-next" value="${esc(ldraft.next||'')}"></div>
+    <div class="fl lk-month"><label>Уже оплачено в этом месяце<div class="hint">если заплатили до того, как начали вести учёт</div></label><input type="text" inputmode="decimal" class="small" style="width:120px" id="ln-paid" value="${src?r0(prepaidM(fid,src.id,ym(today())))||'':''}" placeholder="0"></div>
+    <div class="fl lk-sum lk-open"><label>Откладывать в месяц</label><input type="text" inputmode="decimal" class="small" style="width:120px" id="ln-monthly" value="${+ldraft.monthly||''}" placeholder="₽"></div>
+    <div class="fl"><label>${src?'Остаток сейчас':'Уже накоплено'}<div class="hint">${src?'если отличается от реального — поправьте':'если что-то уже отложено'}</div></label><input type="text" inputmode="decimal" class="small" style="width:120px" id="ln-bal" value="${src?r0(bal):''}" placeholder="0"></div>
+  </div>
+  <div class="rep-prev" id="ln-prev"></div>
+  <div class="actions"><button type="button" class="btn ghost" data-act="close">Отмена</button><button type="button" class="btn pri" data-act="linesave" data-f="${fid}">Сохранить</button></div>`);
+  const sync=()=>{const k=$('#ln-kind').value;document.querySelectorAll('.sheet [class*="lk-"]').forEach(e=>{const ks=[...e.classList].filter(c=>c.startsWith('lk-')).map(c=>c.slice(3));e.classList.toggle('hide',!ks.includes(k));});
+    $('.ln-amount').classList.toggle('hide',k==='open');
+    const l=readLine(true);if(!l){$('#ln-prev').innerHTML='';return;}const tmp={id:'__tmp',lines:[l]};const tg=r0(lineTargetPreview(l,numIn($('#ln-bal').value)));
+    $('#ln-prev').innerHTML=`<div class="rp-l">Откладывать в этом месяце: ${money(tg)}</div><div class="rp-d">${l.kind==='every'||l.kind==='date'?'считается так, чтобы к сроку набрать всю сумму':l.kind==='month'?'остаток в конце месяца уйдёт в «Непредвиденное»':''}</div>`;};
+  document.querySelector('.sheet').addEventListener('input',sync);document.querySelector('.sheet').addEventListener('change',sync);sync();
+  if(!src)setTimeout(()=>$('#ln-name')&&$('#ln-name').focus(),250);
+}
+function lineTargetPreview(l,bal){
+  const M=ym(today());
+  switch(l.kind){case 'month':return +l.amount||0;
+    case 'every':case 'date':{if(!l.next)return 0;const rem=Math.max(0,(+l.amount||0)-bal),m=Math.max(1,monthsBetween(M,ym(l.next)));return rem/m;}
+    case 'sum':return bal>=(+l.amount||0)?0:Math.min(+l.monthly||0,(+l.amount||0)-bal);
+    case 'open':return +l.monthly||0;}return 0;
+}
+function readLine(quiet){
+  const name=$('#ln-name').value.trim(),kind=$('#ln-kind').value;
+  const l={id:ldraft.id,name,kind,amount:numIn($('#ln-amount').value),n:Math.max(1,parseInt($('#ln-n').value)||12),next:$('#ln-next').value||'',monthly:numIn($('#ln-monthly').value)};
+  if(quiet)return l;
+  if(!name){toast('Введите название');return null;}
+  if(kind!=='open'&&!l.amount){toast('Укажите сумму');return null;}
+  if((kind==='every'||kind==='date')&&!l.next){toast('Укажите дату');return null;}
+  if((kind==='sum'||kind==='open')&&!l.monthly){toast('Укажите, сколько откладывать в месяц');return null;}
+  if(kind!=='every')delete l.n;if(kind!=='every'&&kind!=='date')delete l.next;if(kind!=='sum'&&kind!=='open')delete l.monthly;if(kind==='open')delete l.amount;
+  return l;
+}
+function saveLine(fid,isRes){
+  const f=fundOf(fid);if(!f)return;
+  if(isRes){const want=parseFloat(String($('#ln-bal').value).replace(',','.'))||0,b=lineBal(fid,RES),d=Math.round((want-b)*100)/100;
+    if(d)S.ops.push({id:uid(),fund:fid,line:RES,type:d>0?'in':'out',sum:Math.abs(d),date:today(),note:'Правка остатка',adj:1});
+    save();closeSheet();render();setTimeout(()=>openFundView(fid),240);return;}
+  const l=readLine();if(!l)return;
+  const i=f.lines.findIndex(x=>x.id===l.id);if(i>=0)f.lines[i]=l;else f.lines.push(l);
+  if(l.kind==='month'&&$('#ln-paid')){const M=ym(today()),want=numIn($('#ln-paid').value),had=prepaidM(fid,l.id,M);
+    if(want!==had){S.ops=S.ops.filter(o=>!(o.fund===fid&&o.line===l.id&&o.prepaid&&ym(o.date)===M));
+      if(want>0){const g=uid();S.ops.push({id:uid(),fund:fid,line:l.id,type:'in',sum:want,date:today(),note:'Оплачено до начала учёта',prepaid:1,tr:g,fill:1},{id:uid(),fund:fid,line:l.id,type:'out',sum:want,date:today(),note:'Оплачено до начала учёта',prepaid:1,tr:g});}}}
+  const raw=String($('#ln-bal').value).trim();
+  if(raw!==''){const want=parseFloat(raw.replace(/\s/g,'').replace(',','.'))||0,b=lineBal(fid,l.id),d=Math.round((want-b)*100)/100;
+    if(d)S.ops.push({id:uid(),fund:fid,line:l.id,type:d>0?'in':'out',sum:Math.abs(d),date:today(),note:i>=0?'Правка остатка':'Уже накоплено',adj:1});}
+  save();closeSheet();render();toast('Сохранено');setTimeout(()=>openFundView(fid),240);
+}
+
+/* ----- операция: внести / потратить ----- */
+let opDraft=null;
+function openOp(type,fund){
+  if(!S.funds.length){toast('Сначала создайте категорию');openFund();return;}
+  opDraft={type:type||'out',fund:fund||S.funds[0].id,line:RES};
+  openSheet(`<div class="shead"><h3>${opDraft.type==='in'?'Внести':'Трата'}</h3></div>
+  <div class="seg" style="margin-bottom:10px"><button type="button" class="${opDraft.type==='in'?'on':''}" data-act="optype" data-t="in">Внести</button><button type="button" class="${opDraft.type==='out'?'on':''}" data-act="optype" data-t="out">Потратила</button></div>
+  <div class="fld"><input type="text" inputmode="decimal" id="op-sum" class="title-in" placeholder="Сумма, ₽" autocomplete="off"></div>
+  <div class="fld"><div class="fl"><label>Категория</label></div><div class="chips" id="op-funds" style="padding-top:0">${opFundChips()}</div>
+    <div id="op-lines">${opLineChips()}</div></div>
+  <div class="fld"><div class="fl"><label>Дата</label><input type="date" id="op-date" value="${today()}"></div><input type="text" id="op-note" placeholder="Комментарий" autocomplete="off"></div>
+  <p class="muted small" id="op-hint" style="margin:0 4px 6px"></p>
+  <div class="actions"><button type="button" class="btn ghost" data-act="close">Отмена</button><button type="button" class="btn pri" data-act="opsave">Сохранить</button></div>`);
+  opHint();setTimeout(()=>$('#op-sum')&&$('#op-sum').focus(),250);
+}
+const opFundChips=()=>S.funds.map(f=>`<button type="button" class="chip cchip ${opDraft.fund===f.id?'on':''}" style="--cc:${f.color}" data-act="opfund" data-id="${f.id}"><span class="ci">${esc(f.icon)}</span>${esc(f.name)}</button>`).join('');
+function opLineChips(){
+  if(opDraft.type==='in')return '';
+  const f=fundOf(opDraft.fund);const ls=[...(f.lines||[]).map(l=>[l.id,l.name]),[RES,'🛟 Непредвиденное']];
+  if(!ls.some(x=>x[0]===opDraft.line))opDraft.line=RES;
+  return `<div class="fl"><label>Из статьи</label></div><div class="chips" style="padding-top:0">${ls.map(([id,n])=>`<button type="button" class="chip ${opDraft.line===id?'on':''}" data-act="opline" data-id="${id}">${esc(n)} · ${money(lineBal(f.id,id))}</button>`).join('')}</div>`;
+}
+function opHint(){const f=fundOf(opDraft.fund),el=$('#op-hint');if(!el)return;
+  if(opDraft.type==='in'){const p=fundPlan(f);el.textContent=p.need?`Раскладка автоматическая: сначала ежемесячные статьи, потом накопительные. В этом месяце нужно ещё ${money(p.need)}; лишнее уйдёт в «Непредвиденное».`:'План на месяц уже выполнен — взнос уйдёт в «Непредвиденное».';}
+  else el.textContent='Если в статье не хватит, недостача покроется из «Непредвиденного».';}
+function saveOp(){
+  const sum=numIn($('#op-sum').value);if(!sum){toast('Введите сумму');$('#op-sum').focus();return;}
+  const date=$('#op-date').value||today(),note=$('#op-note').value.trim(),f=fundOf(opDraft.fund);
+  if(opDraft.type==='in'){const put=deposit(f.id,sum,note||'Взнос',date);save();closeSheet();render();toast('Разложено: '+put.map(([id,s])=>(id===RES?'резерв':(lineOf(f,id)||{}).name)+' '+money(s)).join(', '));return;}
+  const lid=opDraft.line;const l=lineOf(f,lid);
+  const cov=spend(f.id,lid,sum,note||(l?l.name:'Трата'),date);
+  save();closeSheet();render();
+  if(cov)toast(`Не хватало ${money(cov)} — взято из «Непредвиденного»`);else toast('Записано');
+  if(l&&(l.kind==='month'||l.kind==='every')&&sum>(+l.amount||0))setTimeout(()=>ask('Цена выросла?',`В статье «${l.name}» стоит ${money(l.amount)}, потрачено ${money(sum)}.`,[{label:'Обновить сумму статьи до '+money(sum),value:'y',cls:'pri'}]).then(v=>{if(v){l.amount=sum;save();render();toast('Сумма статьи обновлена');}}),300);
+}
+
+/* ----- категория: создание и правка ----- */
+let fdraft=null;
+function openFund(id){
+  const src=id?fundOf(id):null;
+  fdraft=src?{...src}:{id:uid(),name:'',icon:'📌',color:freeColor(S.funds),lines:[],_picked:false};
+  openSheet(`<div class="shead"><h3>${src?'Категория':'Новая категория'}</h3>${src?`<button class="iconbtn" data-act="funddel" aria-label="Удалить"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/></svg></button>`:''}</div>
+  <div class="fld"><div class="ncf-top"><span class="emo cico" id="fd-prev" style="background:color-mix(in srgb,${fdraft.color} 22%,transparent)">${esc(fdraft.icon)}</span><input type="text" id="fd-name" value="${esc(fdraft.name)}" placeholder="Название категории" autocomplete="off"></div></div>
+  <div class="fld"><div class="ig-h">Цвет</div><div id="fd-colors">${colorRow(fdraft.color,'fdcolor')}</div><div id="fd-icons">${iconGrid(fdraft.icon,'fdicon')}</div></div>
+  <div class="actions"><button type="button" class="btn ghost" data-act="close">Отмена</button><button type="button" class="btn pri" data-act="fundsave">Сохранить</button></div>`);
+  $('#fd-name').addEventListener('input',e=>{if(fdraft._picked)return;const g=guessIcon(e.target.value);if(g){fdraft.icon=g;fdRefresh();}});
+  if(!src)setTimeout(()=>$('#fd-name')&&$('#fd-name').focus(),250);
+}
+function fdRefresh(){$('#fd-prev').textContent=fdraft.icon;$('#fd-prev').style.background=`color-mix(in srgb,${fdraft.color} 22%,transparent)`;
+  document.querySelectorAll('#fd-colors .sw').forEach(b=>b.classList.toggle('on',b.dataset.c===fdraft.color));
+  document.querySelectorAll('#fd-icons .emo').forEach(b=>b.classList.toggle('on',b.dataset.e===fdraft.icon));}
+function saveFund(){
+  const name=$('#fd-name').value.trim();if(!name){toast('Введите название');return;}
+  if(fdraft.icon==='📌'&&!fdraft._picked){toast('Выберите значок');return;}
+  const old=fundOf(fdraft.id);const f={id:fdraft.id,name,icon:fdraft.icon,color:fdraft.color,lines:old?old.lines:[]};
+  const i=S.funds.findIndex(x=>x.id===f.id);if(i>=0)S.funds[i]=f;else S.funds.push(f);
+  save();closeSheet();render();toast('Сохранено');setTimeout(()=>openFundView(f.id),240);
+}
+
+/* ----- внести с выплаты: суммы по категориям, раскладка внутри — автоматически ----- */
+let distCtx=null;
+function openDistribute(k,kind){
+  if(!S.funds.length){toast('Сначала создайте категорию');return;}
+  if(!kind){const p=lastPayday(today());k=p.k;kind=p.kind;}
+  distCtx={k,kind};
+  openSheet(`<div class="shead"><h3>💰 Внести по плану</h3></div>
+  <div class="seg" style="margin-bottom:10px"><button type="button" class="${kind==='zp'?'on':''}" data-act="distkind" data-kind="zp">С зарплаты</button><button type="button" class="${kind==='av'?'on':''}" data-act="distkind" data-kind="av">С аванса</button></div>
+  <p class="muted small" style="margin:0 4px 8px">${kind==='zp'?'С зарплаты — ⅔ месячного плана':'С аванса — всё, что осталось внести в этом месяце'}. Можно поправить суммы; внутри категории деньги разложатся по статьям сами.</p>
+  <div class="fld">${S.funds.map(f=>`<div class="fl"><label>${esc(f.icon)} ${esc(f.name)}<div class="hint">план ${money(fundPlan(f).target)}/мес · осталось ${money(fundPlan(f).need)}</div></label><input type="text" inputmode="decimal" class="small dist" style="width:110px" data-id="${f.id}" value="${paySuggest(f,kind)||''}" placeholder="0"></div>`).join('')}
+  <div class="fl"><label><b>Итого</b></label><b id="dist-tot"></b></div></div>
+  <div class="actions"><button type="button" class="btn ghost" data-act="close">Отмена</button><button type="button" class="btn pri" data-act="distsave">Внести</button></div>`);
+  const tot=()=>{let t=0;document.querySelectorAll('.dist').forEach(x=>t+=numIn(x.value));$('#dist-tot').textContent=money(t);};
+  document.querySelectorAll('.dist').forEach(inp=>inp.addEventListener('input',tot));tot();
+}
+function saveDistribute(){
+  let n=0,t=0;const date=today(),vals=[];
+  document.querySelectorAll('.dist').forEach(inp=>{const v=numIn(inp.value);if(v)vals.push([inp.dataset.id,v]);});
+  if(!vals.length){toast('Все суммы пустые');return;}
+  for(const [id,v] of vals){deposit(id,v,payName(distCtx.kind),date);n++;t+=v;}
+  const p=lastPayday(today());if(p.kind===distCtx.kind)S.paid[p.k]=true;
+  save();closeSheet();render();toast(`Внесено ${money(t)}`);
 }
 
 /* ============ листы (bottom sheet) ============ */
@@ -1007,6 +1400,7 @@ function openItem(id,preset={},ctxK=''){
     <div id="shopbox" class="${edit.needShop?'':'hide'}">
       <div class="fl"><label>Сумма<div class="hint">попадёт в «Траты на неделю» в календаре</div></label><input type="number" class="small" style="width:110px" id="f-shopsum" min="0" step="any" inputmode="decimal" value="${+edit.shopSum>0?esc(edit.shopSum):''}" placeholder="₽"></div>
       <div class="fl"><label>Напомнить за неделю<div class="hint">подсказка на главном и уведомление</div></label><span class="toggle"><input type="checkbox" id="f-shoprem" ${edit.shopRemind===false?'':'checked'}><span></span></span></div>
+      <div class="fl"><label>Списать из<div class="hint">когда отметите дело выполненным</div></label><select id="f-fund"><option value="">Не списывать</option>${S.funds.map(f=>`<optgroup label="${esc(f.icon+' '+f.name)}">${(f.lines||[]).map(l=>`<option value="${f.id}|${l.id}" ${edit.fund===f.id&&edit.fline===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}<option value="${f.id}|" ${edit.fund===f.id&&!edit.fline?'selected':''}>Непредвиденное</option></optgroup>`).join('')}</select></div>
       <div class="fl"><label>Что купить<div class="hint">можно не заполнять</div></label></div>
       <div id="shops">${(edit.shop||[]).map(x=>shopRow(x,shopBought(edit,x.id,k))).join('')}</div>
       <div style="padding:6px 0 10px"><button type="button" class="btn sm" data-act="addshop">+ что купить</button></div>
@@ -1120,7 +1514,8 @@ function readShop(it,k){
     const id=el.dataset.sid,on=el.querySelector('.chk').classList.contains('on');list.push({id,t,done:isRep(it)?false:on});if(on)bought.push(id);});
   it.shop=list;it.needShop=$('#f-needshop').checked;
   const sv=parseFloat($('#f-shopsum').value);it.shopSum=sv>0?sv:null;it.shopRemind=$('#f-shoprem').checked;
-  if(!it.needShop){it.shopSum=null;}
+  {const v=$('#f-fund').value;if(v){const [a,b]=v.split('|');it.fund=a;it.fline=b||'';}else{delete it.fund;delete it.fline;}}
+  if(!it.needShop){it.shopSum=null;delete it.fund;delete it.fline;}
   if(isRep(it)&&k){it.shopDone=it.shopDone||{};it.shopDone[k]=bought;}
   if(!it.needShop){delete it.shopDone;}
 }
@@ -1347,6 +1742,9 @@ function buildAlarms(){
     if(s.agenda){const its=itemsOn(k).filter(it=>!(isCheck(it)&&isDone(it,k)));const t=atMs(k,s.agendaTime);
       if(its.length&&t>now)out.push({id:hid('a'+k),at:t,ch:'day',title:`План на сегодня: ${its.length} ${plural(its.length,['пункт','пункта','пунктов'])}`,text:its.slice(0,6).map(it=>(it.time?it.time+' ':'')+it.title).join(' · ')});}
   }
+  for(let i=0;i<H;i++){const k=addDays(k0,i),dd=pdate(k).getDate();if(dd!==12&&dd!==25)continue;const kind=dd===12?'zp':'av';
+    const pt=S.funds.reduce((a,f)=>{const p=fundPlan(f,ym(k));return a+(kind==='zp'?r0(p.target*2/3):r0(p.target/3));},0);
+    if(!pt||S.paid[k])continue;const t=atMs(k,s.morning);if(t>now)out.push({id:hid('pay'+k),at:t,ch:'day',title:`💰 ${payName(kind)} — отложить по плану`,text:`Примерно ${money(pt)} — откройте «Деньги» → «Внести»`});}
   for(const it of S.items){if(it.type!=='goal'||it.done||!it.due||it.remind==null||it.remind==='')continue;
     const t=atMs(it.due,s.morning)-(it.remind>=1440?it.remind*60000:0);
     if(t>now&&diffDays(k0,it.due)<=H)out.push({id:hid('g'+it.id+it.due),at:t,ch:'rem',title:'🎯 '+it.title,text:`Дедлайн ${relFrom(t,it.due)} · ${goalText(it)}`});}
@@ -1371,7 +1769,7 @@ document.addEventListener('click',e=>{
   const a=el.dataset.act,d=el.dataset;
   switch(a){
     case 'tab':tab=d.tab;if(tab==='cal'){cal.cur=cal.sel;}render();window.scrollTo(0,0);break;
-    case 'add':if(tab==='people')openPerson();else openAddMenu();break;
+    case 'add':if(tab==='people')openPerson();else if(tab==='money')openOp();else openAddMenu();break;
     case 'newtype':newOfType(d.t);break;
     case 'gtab':gtab=d.g;render();break;
     case 'gadd':e.stopPropagation();openGoalAdd(d.id);break;
@@ -1398,6 +1796,38 @@ document.addEventListener('click',e=>{
     case 'calview':cal.view=d.v;render();break;
     case 'calmode':cal.mode=d.m;cal.cur=cal.sel;render();break;
     case 'tf':tf=d.f;render();break;
+    case 'mtab':mtab=d.m;render();break;
+    case 'mmon':{const [y,m]=mmon.split('-').map(Number),x=new Date(y,m-1+(+d.d),1);mmon=dkey(x).slice(0,7);render();break;}
+    case 'fund':openFundView(d.id);break;
+    case 'fundnew':openFund();break;
+    case 'fundedit':{sheetOnClose=null;closeSheet();setTimeout(()=>openFund(d.id),230);break;}
+    case 'fdcolor':fdraft.color=d.c;fdRefresh();break;
+    case 'fdicon':fdraft.icon=d.e;fdraft._picked=true;fdRefresh();break;
+    case 'fundsave':saveFund();break;
+    case 'funddel':{const f=fundOf(fdraft.id);if(!f)break;const b=fundBal(f.id);
+      ask('Удалить категорию «'+f.name+'»?',(b?`В ней ${money(b)}. `:'')+'Статьи и история операций тоже удалятся.',[{label:'Удалить',value:'y',cls:'danger'}]).then(v=>{if(!v)return;
+        S.funds=S.funds.filter(x=>x.id!==f.id);S.ops=S.ops.filter(o=>o.fund!==f.id);for(const it of S.items)if(it.fund===f.id){delete it.fund;delete it.fline;}save();render();toast('Категория удалена');});break;}
+    case 'linenew':{const fid=d.id;sheetOnClose=null;closeSheet();setTimeout(()=>openLine(fid),230);break;}
+    case 'lineedit':{const fid=fvId,lid=d.id;sheetOnClose=null;closeSheet();setTimeout(()=>openLine(fid,lid),230);break;}
+    case 'linesave':saveLine(d.f,d.res==='1');break;
+    case 'linedel':{const f=fundOf(d.f),l=lineOf(f,ldraft.id);if(!l)break;const b=lineBal(f.id,l.id);
+      ask('Удалить статью «'+l.name+'»?',b?`Остаток ${money(b)} перейдёт в «Непредвиденное».`:'',[{label:'Удалить',value:'y',cls:'danger'}]).then(v=>{if(!v){setTimeout(()=>openFundView(f.id),240);return;}
+        if(b)transfer(f.id,l.id,RES,b,'Статья «'+l.name+'» удалена');S.ops.forEach(o=>{if(o.fund===f.id&&o.line===l.id)o.line=RES;});
+        f.lines=f.lines.filter(x=>x.id!==l.id);for(const it of S.items)if(it.fund===f.id&&it.fline===l.id)delete it.fline;save();render();setTimeout(()=>openFundView(f.id),240);});break;}
+    case 'restr':{const f=fundOf(d.f),to=$('#tr-to').value,v=numIn($('#tr-sum').value);if(!v){toast('Введите сумму');break;}
+      transfer(f.id,RES,to,v,'Из непредвиденного',null,{fill:1});save();closeSheet();render();toast('Перекинуто');setTimeout(()=>openFundView(f.id),240);break;}
+    case 'opnew':{const t=d.t,id=d.id;sheetOnClose=null;closeSheet();setTimeout(()=>openOp(t,id),230);break;}
+    case 'optype':opDraft.type=d.t;el.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===el));$('.sheet h3').textContent=d.t==='in'?'Внести':'Трата';$('#op-lines').innerHTML=opLineChips();opHint();break;
+    case 'opfund':opDraft.fund=d.id;opDraft.line=RES;$('#op-funds').innerHTML=opFundChips();$('#op-lines').innerHTML=opLineChips();opHint();break;
+    case 'opline':opDraft.line=d.id;$('#op-lines').innerHTML=opLineChips();break;
+    case 'opsave':saveOp();break;
+    case 'op':{const o=S.ops.find(x=>x.id===d.id);if(!o)break;const f=fundOf(o.fund);
+      ask((o.type==='in'?'+':'−')+money(o.sum)+(f?' · '+f.name:''),(o.note||'')+(o.itemId?' (списано из дела — снимите отметку у дела, чтобы вернуть)':''),[{label:'Удалить операцию',value:'y',cls:'danger'}]).then(v=>{if(!v)return;S.ops=S.ops.filter(x=>x.id!==o.id);save();render();toast('Удалено');});break;}
+    case 'opgrp':{const g=d.g,ops=S.ops.filter(x=>x.dep===g||x.tr===g);if(!ops.length)break;const isDep=!!ops[0].dep,sum=isDep?ops.reduce((a,x)=>a+x.sum,0):ops[0].sum;
+      ask((isDep?'Взнос ':'Перенос ')+money(sum),isDep?'Удалить взнос целиком (из всех статей)?':'Отменить перенос?',[{label:isDep?'Удалить взнос':'Отменить перенос',value:'y',cls:'danger'}]).then(v=>{if(!v)return;S.ops=S.ops.filter(x=>x.dep!==g&&x.tr!==g);save();render();toast('Удалено');});break;}
+    case 'distribute':openDistribute(d.k,d.kind);break;
+    case 'distkind':{sheetOnClose=null;openDistribute(distCtx.k,d.kind);break;}
+    case 'distsave':saveDistribute();break;
     case 'tcat':tcat=d.id;render();break;
     case 'cat':edit.cat=d.id||null;el.parentNode.querySelectorAll('.chip').forEach(b=>b.classList.toggle('on',b===el));break;
     case 'newcat':{const b=$('#newcat');if(b.classList.contains('hide')){b.innerHTML=newCatForm('nc',S.cats);b.classList.remove('hide');$('#nc-name').focus();}else{b.classList.add('hide');b.innerHTML='';}break;}
@@ -1424,7 +1854,8 @@ document.addEventListener('click',e=>{
         setTimeout(openCats,240);});break;}
     case 'cmsave':saveCats();break;
     case 'pf':pf=d.f;render();break;
-    case 'cdb':S.settings.cdBdays=d.v==='1';save();render();break;
+    case 'cdb':S.settings.cdBdays=d.v==='1';save();render();if(sheetOpen)openCountSheet();break;
+    case 'countall':openCountSheet();break;
     case 'close':closeSheet();break;
     case 'etype':edit.type=d.t;el.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===el));
       if(d.t==='event'&&editCtx.isNew&&$('#f-rem').value===''&&S.settings.defRemind!=='')$('#f-rem').value=S.settings.defRemind;
@@ -1478,7 +1909,7 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
 window.__back=()=>{if(sheetOpen){closeSheet();return true;}if(tab!=='today'){tab='today';render();return true;}return false;};
 /* возврат в приложение: обновить «сегодня» и перепланировать */
 let lastDay=today();
-window.__resume=()=>{if(staleUi()&&!sheetOpen){applyUpdate();return;}if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today();}if(carryOver())save();if(!sheetOpen)render();scheduleNow();};
+window.__resume=()=>{if(staleUi()&&!sheetOpen){applyUpdate();return;}if(today()!==lastDay){lastDay=today();cal.sel=cal.cur=today();}if(carryOver()|moneyTick())save();if(!sheetOpen)render();scheduleNow();};
 setInterval(()=>{if(today()!==lastDay)window.__resume();},60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.__resume();});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);
@@ -1497,7 +1928,7 @@ window.__updateResult=r=>{
 };
 try{if(localStorage.getItem('blizko.updated')){localStorage.removeItem('blizko.updated');setTimeout(()=>toast('Приложение обновлено · версия '+UIVER),400);}}catch(e){}
 
-if(carryOver())save();
+if(carryOver()|moneyTick())save();
 applyTheme();render();scheduleNow();
 try{if(window.Native&&Native.ready)Native.ready();}catch(e){}
 </script>
